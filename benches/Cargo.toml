@@ -1,0 +1,26 @@
+[package]
+name = "benchsuite"
+version = "0.0.0"
+description = "Criterion benchmarks and the published benchmark pages (MASTER_PLAN §12)."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+core-cst = { path = "../crates/core-cst" }
+
+[dev-dependencies]
+# Justification (MASTER_PLAN §2 dependency policy): criterion is named in §8 as
+# the benchmarking tool and in §12 as the source of the published benchmark
+# pages. `default-features = false` drops the plotting stack (gnuplot/plotters),
+# which we do not use — `xtask bench-compare` reads the JSON estimates directly.
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "kernel"
+harness = false
+
+[lints]
+workspace = true

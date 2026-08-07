@@ -1,0 +1,53 @@
+##
+## Long fuzz (nightly) — MASTER_PLAN §8: "cargo-fuzz, capped for free tier;
+## extended runs on Ayush's machine via cron. Report -> new goldens."
+##
+## This job reports; it does not gate. A finding becomes a golden case and a
+## fix, and the golden case is what gates from then on.
+##
+## Fuzz-hours accumulate toward konflux P1: >=72 cumulative hours with zero
+## violations (§4.1). The counter is published as a README badge (§12).
+##
+name: fuzz-nightly
+
+on:
+  schedule:
+    # 03:17 UTC — off the hour, so we are not queued behind everyone's cron.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  long:
+    name: fuzz-long/${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [roundtrip_identity]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: ". -> target\nfuzz -> fuzz/target" }
+      - uses: taiki-e/install-action@v2
+        with: { tool: cargo-fuzz }
+      - name: Long run (3600s)
+        run: |
+          set -euo pipefail
+          cargo +nightly fuzz run ${{ matrix.target }} \
+            fuzz/corpus/${{ matrix.target }} \
+            -- -max_total_time=3600 -print_final_stats=1
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore

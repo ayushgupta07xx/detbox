@@ -1,0 +1,6 @@
+#! tolerance_pct = 10
+# Runner class: ubuntu-latest, GitHub-hosted, x86_64.
+# Calibrated numbers are recorded from a CI run on `main` and land as a
+# reviewed change. See benches/baselines/README.md and ADR-006.
+k1_identity_1kib	uncalibrated
+k1_identity_64kib	uncalibrated

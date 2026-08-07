@@ -1,0 +1,81 @@
+##
+## Supply-chain policy — MASTER_PLAN §8 ("cargo-deny (advisories, licenses,
+## bans) blocking in CI") and §2 ("minimal and pinned; every new dependency
+## needs a one-line justification in the PR").
+##
+## Run locally:  cargo deny check
+##
+
+[graph]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# No ignore list. An advisory we are choosing to live with is a decision, and a
+# decision gets an ADR plus an entry here with the ADR number in the comment —
+# never a silent `ignore` to make the build green.
+ignore = []
+
+[licenses]
+version = 2
+# We ship MIT OR Apache-2.0 (§2, §10). Everything we depend on must be
+# compatible with both, and permissive enough to redistribute in a static binary.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.93
+# No per-crate exceptions. Adding one is a legal decision, not a build fix.
+exceptions = []
+
+[bans]
+# `warn` rather than `deny`: duplicate versions are usually transitive and not
+# always in our power to fix. They are surfaced, reviewed, and fixed where we
+# can — never hidden.
+multiple-versions = "warn"
+wildcards = "deny"
+# Pinning discipline (§2). A `*` version requirement makes the build
+# irreproducible, which is the one thing this repo cannot tolerate.
+highlight = "all"
+
+deny = [
+    # --- Appendix C, permanent bans, made mechanical -------------------------
+    # "no telemetry / phone-home", "no network access by default".
+    # Nothing in this workspace opens a socket. If a tool ever needs `--online`,
+    # the dependency lands in the same PR as the flag and the README paragraph
+    # explaining it, and this entry moves to a scoped allowance.
+    { name = "reqwest", reason = "MASTER_PLAN §3.4/§10: no network access by default, ever. Needs an explicit --online flag, a README justification, and an ADR." },
+    { name = "ureq", reason = "MASTER_PLAN §3.4/§10: no network access by default." },
+    { name = "hyper", reason = "MASTER_PLAN §3.4/§10: no network access by default. replaylab (Wing 2, gated) will need an HTTP stack; that lands with the gate, not before." },
+    # "no load-bearing ML anywhere", "no semantic/similarity caches".
+    { name = "candle-core", reason = "Appendix C: no load-bearing ML anywhere." },
+    { name = "ort", reason = "Appendix C: no load-bearing ML anywhere (ONNX Runtime)." },
+    { name = "tract-onnx", reason = "Appendix C: no load-bearing ML anywhere." },
+    { name = "tokenizers", reason = "Appendix C: no load-bearing ML anywhere." },
+    # Determinism: an unseeded RNG in an output path is a K3 violation waiting
+    # to happen. When a seeded RNG is genuinely needed, it lands with an ADR.
+    { name = "fastrand", reason = "MASTER_PLAN §9.5: seeded randomness only, seed logged. Needs an ADR." },
+]
+
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# No git dependencies. A git dep is an unpinned, unaudited supply chain unless
+# it is SHA-pinned, and even then it bypasses cargo-audit's advisory matching.
+allow-git = []

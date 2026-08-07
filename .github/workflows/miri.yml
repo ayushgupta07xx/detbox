@@ -1,0 +1,69 @@
+##
+## Gate: Memory/UB — MASTER_PLAN §8, "miri (kernel crates), ASan/UBSan jobs".
+##
+## Scoped to the kernel crates: they are the ones every product stands on, and
+## a UB bug there is a wrong answer in nine tools rather than one.
+##
+name: miri
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths: ["crates/**", ".github/workflows/miri.yml", "Cargo.toml", "Cargo.lock"]
+  workflow_dispatch:
+
+concurrency:
+  group: miri-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: nightly
+
+jobs:
+  miri:
+    name: gate/miri (kernel crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with: { components: miri }
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo miri setup
+      - name: miri test kernel crates
+        env:
+          MIRIFLAGS: -Zmiri-strict-provenance
+        run: |
+          set -euo pipefail
+          for crate in core-cst core-formats core-verify core-cli core-tui; do
+            echo "::group::miri $crate"
+            # core-verify's golden runner touches the filesystem, which miri
+            # cannot model; its pure logic is covered by the unit tests above.
+            cargo miri test -p "$crate" --lib || exit 1
+            echo "::endgroup::"
+          done
+
+  sanitizers:
+    name: gate/sanitizers (ASan, UBSan)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with: { components: rust-src }
+      - uses: Swatinem/rust-cache@v2
+      - name: test under ${{ matrix.sanitizer }}sanitizer
+        env:
+          RUSTFLAGS: -Zsanitizer=${{ matrix.sanitizer }}
+          RUSTDOCFLAGS: -Zsanitizer=${{ matrix.sanitizer }}
+        run: |
+          set -euo pipefail
+          cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu \
+            -p core-cst -p core-formats -p core-verify -p core-cli -p core-tui

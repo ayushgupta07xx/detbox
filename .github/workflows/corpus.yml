@@ -1,0 +1,50 @@
+##
+## Corpus refresh — MASTER_PLAN §2 (xtask automation), §10 (fetch scripts, not
+## vendored copies).
+##
+## Scheduled rather than per-PR: the fetch needs the network, and the corpus
+## content is pinned to commit SHAs, so it cannot drift between runs. What runs
+## per-PR is the OFFLINE manifest check, inside ci.yml's determinism job.
+##
+## This job's value is catching the day an upstream repo disappears, force-pushes
+## the pinned SHA away, or relicenses — before konflux P1 discovers it.
+##
+name: corpus
+
+on:
+  schedule:
+    - cron: "41 5 * * 0"
+  pull_request:
+    paths: ["corpora/**", ".github/workflows/corpus.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    name: corpus/fetch (1,000 files, exact yields)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Manifests are pinned, capped and licence-clean (offline)
+        run: cargo run -p xtask -- corpus-verify
+      - name: Fetch every category at its pinned SHA
+        run: corpora/fetch.sh
+      - name: Assert the corpus is exactly 1,000 files
+        run: |
+          set -euo pipefail
+          n=$(find corpora/*/*/files -type f | wc -l)
+          echo "corpus: $n files"
+          [ "$n" -eq 1000 ] || { echo "::error::expected 1000 files, got $n"; exit 1; }
+      - name: Nothing fetched may be committable
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain --untracked-files=all corpora | grep -v '^?? corpora/sources/' || true)" ]; then
+            git status --porcelain --untracked-files=all corpora
+            echo "::error::fetched corpus content is not gitignored (MASTER_PLAN §2/§10)"
+            exit 1
+          fi

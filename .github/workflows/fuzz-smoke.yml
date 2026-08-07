@@ -1,0 +1,55 @@
+##
+## Gate: Fuzz smoke (per-PR) — MASTER_PLAN §8, "cargo-fuzz, ~5 min/target, Blocking".
+##
+## K1 is the first CI gate ever written and it never comes out (§3.1).
+## Any violation found here is minimised and filed as a failing golden case
+## under crates/core-verify/tests/golden/ (§3.3) — never silenced.
+##
+name: fuzz-smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: fuzz-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  smoke:
+    name: fuzz/${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # One entry per format per operation (§2). M1 adds yaml_roundtrip and
+        # json_roundtrip here in the same PR as the parser.
+        target: [roundtrip_identity]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: ". -> target\nfuzz -> fuzz/target" }
+      - uses: taiki-e/install-action@v2
+        with: { tool: cargo-fuzz }
+      - name: Smoke ${{ matrix.target }} (300s, corpus-seeded)
+        run: |
+          set -euo pipefail
+          cargo +nightly fuzz run ${{ matrix.target }} \
+            fuzz/corpus/${{ matrix.target }} \
+            -- -max_total_time=300 -print_final_stats=1
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore

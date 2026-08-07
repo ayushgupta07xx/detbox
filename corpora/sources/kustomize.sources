@@ -1,0 +1,28 @@
+#! category = kustomize
+#! cap = 150
+#
+# Kustomize overlays and bases. These exercise the patch/overlay shapes konflux
+# must merge structurally, and the upstream project's own testdata is
+# deliberately adversarial about YAML edge cases.
+
+[source]
+name = kubernetes-sigs-kustomize
+repo = https://github.com/kubernetes-sigs/kustomize.git
+rev = 0fd1ae0ce9ba51e9e5ed9396308fa2ff7a08ce95
+license = Apache-2.0
+license_file = LICENSE
+include = examples/**/*.yaml
+include = api/**/*.yaml
+include = plugin/**/*.yaml
+max_files = 72
+
+[source]
+name = argo-cd-manifests
+repo = https://github.com/argoproj/argo-cd.git
+rev = 8a062e3f4d1ec2a8358d201b8e5c5b75e459dd82
+license = Apache-2.0
+license_file = LICENSE
+include = manifests/**/kustomization.yaml
+include = manifests/base/**/*.yaml
+include = manifests/ha/**/*.yaml
+max_files = 78

@@ -1,0 +1,8 @@
+# Stable-only options. Anything requiring nightly rustfmt is banned here: CI
+# runs `cargo fmt --check` on the pinned stable toolchain and must reproduce
+# byte-identically on a contributor's machine.
+edition = "2024"
+max_width = 100
+use_field_init_shorthand = true
+use_try_shorthand = true
+newline_style = "Unix"

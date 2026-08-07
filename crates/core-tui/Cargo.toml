@@ -1,0 +1,14 @@
+[package]
+name = "core-tui"
+version = "0.0.0"
+description = "Shared ratatui components and the one theme every tool wears."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,45 @@
+# Determinism hygiene, mechanically enforced (MASTER_PLAN §9.5).
+#
+# §9.5 lists the recurring failure modes to preempt. Comments do not preempt
+# anything; lints do. Each entry below maps to one line of §9.5.
+#
+# If you genuinely need one of these (e.g. a HashMap in a hot inner loop whose
+# iteration order never reaches an output), add `#[allow(...)]` at the use site
+# with a one-line comment naming why the value never reaches an output path.
+
+msrv = "1.90"
+
+# `..` keeps clippy's default list. These are words the docs use constantly and
+# that are not code identifiers, so `doc_markdown` should leave them alone.
+doc-valid-idents = ["MASTER_PLAN", "AcroForm", "BusyBox", "DuckDB", "GumTree", "JSONTestSuite", "MkDocs", "OpenAI", "PDF/A", "SLSA", "WASI", "WSL2", ".."]
+
+# "no HashMap iteration in any output path" -> ban the types outright in this
+# workspace; BTreeMap/BTreeSet (ordered) or IndexMap (insertion-ordered) instead.
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "MASTER_PLAN K3/§9.5: nondeterministic iteration order. Use BTreeMap, or IndexMap when insertion order is the contract." },
+    { path = "std::collections::HashSet", reason = "MASTER_PLAN K3/§9.5: nondeterministic iteration order. Use BTreeSet, or IndexSet when insertion order is the contract." },
+]
+
+disallowed-methods = [
+    # "no wall-clock in outputs unless flagged"
+    { path = "std::time::SystemTime::now", reason = "MASTER_PLAN K3/§9.5: wall-clock must never reach an output. Inject the value at the boundary instead." },
+    { path = "std::time::Instant::now", reason = "MASTER_PLAN K3/§9.5: timing may be measured, never serialised. Confine to benches/ and mark the allow." },
+    # "stable sorts"
+    { path = "slice::sort_unstable", reason = "MASTER_PLAN §9.5: stable sorts everywhere; equal elements must keep source order." },
+    { path = "slice::sort_unstable_by", reason = "MASTER_PLAN §9.5: stable sorts everywhere." },
+    { path = "slice::sort_unstable_by_key", reason = "MASTER_PLAN §9.5: stable sorts everywhere." },
+    # "seeded randomness only, seed logged": `rand::random` cannot be listed until
+    # `rand` is in the dependency graph — clippy warns on unresolvable paths, and a
+    # warning here is worse than useless because it trains everyone to ignore this
+    # file. Add the entry in the same PR that adds the dependency.
+    # "locale-independent formatting"
+    { path = "str::to_lowercase", reason = "MASTER_PLAN §9.5: locale/Unicode-dependent. Use eq_ignore_ascii_case / to_ascii_lowercase for format tokens." },
+    { path = "str::to_uppercase", reason = "MASTER_PLAN §9.5: locale/Unicode-dependent. Use to_ascii_uppercase for format tokens." },
+]
+
+# Restriction lints (unwrap/expect/panic/indexing) are denied in product code by
+# MASTER_PLAN §0 priority 1. In tests, a panic IS the failure signal.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true

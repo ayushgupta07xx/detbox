@@ -1,0 +1,56 @@
+##
+## Gate: Benchmark regression — MASTER_PLAN §8, "criterion vs saved baselines,
+## ±threshold. Blocking on regression."
+##
+## What is blocking today (see ADR-006 and benches/baselines/README.md):
+##   * the criterion run happened and its output parses;
+##   * every benchmark named in the baseline still exists;
+##   * every benchmark that ran is named in the baseline;
+##   * calibrated entries are within tolerance.
+##
+## Numbers are `uncalibrated` until recorded from a run on `main`. Publishing
+## laptop timings as runner timings would be a cherry-picked benchmark, which is
+## a permanent ban (Appendix C).
+##
+name: bench
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "benches/**"
+      - "crates/**"
+      - "xtask/**"
+      - ".github/workflows/bench.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench:
+    name: gate/benchmark-baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: criterion
+        run: cargo bench -p benchsuite -- --warm-up-time 1 --measurement-time 3
+      - name: compare against saved baseline
+        run: cargo run --release -p xtask -- bench-compare target/criterion benches/baselines/linux-x86_64.tsv
+      - name: upload raw criterion data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-raw
+          path: target/criterion/
+          if-no-files-found: ignore

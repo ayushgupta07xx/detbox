@@ -1,0 +1,82 @@
+##
+## Workspace root — virtual manifest.
+##
+## NOTE (Decision D1, MASTER_PLAN §16): the umbrella brand and the multicall
+## binary name `<b>` are NOT chosen. No crate here is named for the brand, and
+## no multicall binary crate exists yet. Both land in the same PR as D1.
+##
+[workspace]
+resolver = "3"
+members = [
+    "crates/core-cst",
+    "crates/core-formats",
+    "crates/core-verify",
+    "crates/core-cli",
+    "crates/core-tui",
+    "tools/konflux",
+    "tools/strukt",
+    "tools/bigsheet",
+    "tools/pdfsurgeon",
+    "tools/veritas",
+    "tools/lockproof",
+    "tools/coverify",
+    "tools/replaylab",
+    "tools/cage",
+    "benches",
+    "xtask",
+]
+# `fuzz/` is a detached workspace (cargo-fuzz convention: nightly-only,
+# libfuzzer-sys link flags must not leak into the main build).
+exclude = ["fuzz", "shell"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.90"          # MSRV — ADR-002. CI-checked; raise only via ADR.
+license = "MIT OR Apache-2.0"  # MASTER_PLAN §2/§10. D4 finalises the file set.
+repository = "https://github.com/ayushgupta07xx/detbox"
+publish = false                # flipped per-crate, deliberately, at publish time
+
+##
+## Lint law (MASTER_PLAN §8: "Format + lints — clippy (pedantic) — Blocking").
+## Declared here rather than as CI flags so a local `cargo clippy` reproduces CI
+## exactly. Adding an `allow` requires a justification comment at the use site.
+##
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "deny"           # kernel crates opt out explicitly if ever needed
+rust_2018_idioms = { level = "deny", priority = -1 }
+unreachable_pub = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+# --- Determinism hygiene, MASTER_PLAN §9.5 -----------------------------------
+# These are the lints that mechanically catch the four failure modes §9.5 names.
+# They are part of the CI law, not style preferences.
+disallowed_types = "deny"      # HashMap/HashSet in output paths — see clippy.toml
+disallowed_methods = "deny"    # wall-clock, unstable sort — see clippy.toml
+# --- Soundness: never silently wrong (MASTER_PLAN §0 priority 1) -------------
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+integer_division = "deny"
+float_cmp = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+# `panic = "abort"` is deliberately NOT set: it breaks `cargo test --release`,
+# which the determinism gate uses. Revisit as its own ADR if we ever want
+# abort-on-panic as a soundness stance for shipped binaries.
+
+# Fuzzing and property tests are unbearably slow with unoptimised dependencies.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1
+debug = true      # criterion needs symbols for meaningful profiles

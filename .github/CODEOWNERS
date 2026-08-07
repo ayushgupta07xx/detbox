@@ -1,0 +1,36 @@
+# Human review points — MASTER_PLAN §9.3, non-delegable.
+#
+# "Every ADR; every public API change; every golden-file change; every new
+#  dependency; every README/launch artifact. Ayush's role is architect + editor
+#  and the person who can defend every decision live."
+#
+# CODEOWNERS makes those five categories mechanical rather than remembered.
+# It is advisory until branch protection requires owner review — enable that on
+# `main` (Settings -> Branches) so it has teeth.
+
+# Default: everything.
+*                           @ayushgupta07xx
+
+# --- Evidence. Changing these is never a build fix. ---------------------------
+**/tests/golden/**          @ayushgupta07xx
+fuzz/corpus/**              @ayushgupta07xx
+benches/baselines/**        @ayushgupta07xx
+corpora/sources/**          @ayushgupta07xx
+
+# --- The rules themselves ------------------------------------------------
+MASTER_PLAN.md              @ayushgupta07xx
+ENGINEERING.md              @ayushgupta07xx
+MILESTONES.md               @ayushgupta07xx
+adr/**                      @ayushgupta07xx
+
+# --- Dependency and CI policy --------------------------------------------
+Cargo.toml                  @ayushgupta07xx
+Cargo.lock                  @ayushgupta07xx
+deny.toml                   @ayushgupta07xx
+clippy.toml                 @ayushgupta07xx
+rust-toolchain.toml         @ayushgupta07xx
+.github/workflows/**        @ayushgupta07xx
+
+# --- Public face ----------------------------------------------------------
+**/README.md                @ayushgupta07xx
+docs/**                     @ayushgupta07xx

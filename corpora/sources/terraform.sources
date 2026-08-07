@@ -1,0 +1,36 @@
+#! category = terraform
+#! cap = 250
+#
+# HCL from widely-used community modules. Deliberately NOT hashicorp/terraform
+# itself: that repository moved to BUSL-1.1, which is not on the allow-list.
+# These modules are Apache-2.0 community code.
+#
+# HCL support lands in Phase 2 (strukt), but the corpus is fetched from Phase 0
+# so that the K1 gate has hostile input waiting the day the parser exists.
+
+[source]
+name = terraform-aws-vpc
+repo = https://github.com/terraform-aws-modules/terraform-aws-vpc.git
+rev = 0a36bd54069c64be2da788b2afb5df0a8e8e7398
+license = Apache-2.0
+license_file = LICENSE
+include = **/*.tf
+max_files = 65
+
+[source]
+name = terraform-aws-eks
+repo = https://github.com/terraform-aws-modules/terraform-aws-eks.git
+rev = d386adc021dc370efe1bceb7991fbed6e9787c84
+license = Apache-2.0
+license_file = LICENSE
+include = **/*.tf
+max_files = 85
+
+[source]
+name = terraform-aws-rds
+repo = https://github.com/terraform-aws-modules/terraform-aws-rds.git
+rev = 9920097a40175c084c46fee1c306fa61cdbaf823
+license = Apache-2.0
+license_file = LICENSE
+include = **/*.tf
+max_files = 100

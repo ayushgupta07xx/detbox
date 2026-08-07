@@ -1,0 +1,24 @@
+#! category = k8s-manifests
+#! cap = 200
+#
+# Plain Kubernetes manifests. These are the inputs for konflux M5's semantic
+# layer: containers matched by `name`, env vars matched by key, ports matched by
+# `containerPort` — never by list position.
+
+[source]
+name = kubernetes-examples
+repo = https://github.com/kubernetes/examples.git
+rev = d6b8cd27eacb51e651a1aa6f7c190a28713eff6e
+license = Apache-2.0
+license_file = LICENSE
+include = **/*.yaml
+max_files = 100
+
+[source]
+name = istio-samples
+repo = https://github.com/istio/istio.git
+rev = e0ab38af226540ae5ea4e56021715758bf302dc8
+license = Apache-2.0
+license_file = LICENSE
+include = samples/**/*.yaml
+max_files = 100

@@ -1,0 +1,20 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+description = "Repo automation: determinism gate, corpus verification, benchmark baselines."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# Dependency policy (MASTER_PLAN §2): minimal and pinned; every new dependency
+# needs a one-line justification in the PR.
+#
+# xtask has ZERO third-party dependencies, deliberately. It is the tool that
+# proves determinism and verifies the corpus; it should not itself be a supply
+# chain. SHA-256 is implemented in-crate against FIPS 180-4 vectors (ADR-005).
+[dependencies]
+
+[lints]
+workspace = true

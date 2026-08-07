@@ -1,0 +1,42 @@
+#! category = helm-charts
+#! cap = 400
+#
+# Real-world Helm charts. These are the files konflux P1 must round-trip:
+# heavy Go-template interleaving, multi-document YAML, anchors, long comment
+# blocks, and every quoting style a human has ever reached for.
+#
+# `rev` is always a full 40-char commit SHA. Branches and tags move, and a
+# moving corpus turns a green proof into a coin flip.
+
+[source]
+name = prometheus-community-helm-charts
+repo = https://github.com/prometheus-community/helm-charts.git
+rev = 7da1f0d6e15bb28f3ad2446b7e6c560cc164098f
+license = Apache-2.0
+license_file = LICENSE
+include = charts/*/values.yaml
+include = charts/*/Chart.yaml
+include = charts/*/templates/*.yaml
+max_files = 150
+
+[source]
+name = grafana-helm-charts
+repo = https://github.com/grafana/helm-charts.git
+rev = 72599ecde12f39a9d2a531b027dbedf0198fa793
+license = Apache-2.0
+license_file = LICENSE
+include = charts/*/values.yaml
+include = charts/*/Chart.yaml
+include = charts/*/templates/*.yaml
+max_files = 130
+
+[source]
+name = bitnami-charts
+repo = https://github.com/bitnami/charts.git
+rev = 3958af42cd0265d8e38799ad17497346780de945
+license = Apache-2.0
+license_file = LICENSE.md
+include = bitnami/*/values.yaml
+include = bitnami/*/Chart.yaml
+include = bitnami/*/templates/*.yaml
+max_files = 120

@@ -1,0 +1,271 @@
+##
+## The CI Law — MASTER_PLAN §8.
+##
+## "Applies to every crate, from the first commit. CI is the objective feedback
+##  loop that makes fast-moving development trustworthy; it is never weakened to
+##  go faster."
+##
+## Every gate in the §8 table is a separate job so that a red check names the
+## invariant it broke. Gates that cannot be meaningful before a parser exists
+## (conformance, differential) are wired here against trivial fixtures and arm
+## at konflux M1 — see ADR-003 and MILESTONES.md. None of them is skipped.
+##
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  # Free-tier discipline (MASTER_PLAN §10): no incremental artifacts to cache,
+  # and no debug info in CI builds that do not need it.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+jobs:
+  # --- Gate: Format + lints ------------------------------------------------
+  fmt:
+    name: gate/format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: rustfmt }
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: gate/lints (clippy pedantic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      # The pedantic level and the determinism bans live in Cargo.toml
+      # [workspace.lints] and clippy.toml, so this command reproduces locally.
+      - run: cargo clippy --workspace --all-targets --all-features
+
+  # --- Gate: Unit + property tests -----------------------------------------
+  test:
+    name: gate/tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --all-features
+
+  # --- Gate: Golden-file suites --------------------------------------------
+  golden:
+    name: gate/golden
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: core-verify golden runner
+        run: cargo test -p core-verify --all-features -- --nocapture
+
+  # --- The anti-reward-hacking law, mechanised (MASTER_PLAN §8) -------------
+  # "It is never permissible to (a) edit golden files, (b) loosen thresholds,
+  #  (c) delete/skip/weaken tests, or (d) special-case test inputs in product
+  #  code, in order to make CI pass."
+  golden-guard:
+    name: gate/golden-guard
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Evidence files may not change without human sign-off
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          touched=$(git diff --name-only "$BASE" "$HEAD" -- \
+            '**/tests/golden/**' \
+            'benches/baselines/**' \
+            'corpora/sources/**' \
+            'fuzz/corpus/**' || true)
+          if [ -z "$touched" ]; then
+            echo "No evidence files touched."
+            exit 0
+          fi
+          echo "This PR changes evidence files:"
+          echo "$touched" | sed 's/^/  /'
+          if printf '%s' "$PR_BODY" | grep -qF '[NEEDS-AYUSH-APPROVAL]'; then
+            echo
+            echo "PR body carries [NEEDS-AYUSH-APPROVAL]. Ayush signs off on the merge."
+            exit 0
+          fi
+          echo
+          echo "::error::Golden files, baselines, corpus manifests and fuzz seeds are"
+          echo "::error::EVIDENCE (MASTER_PLAN §8). They may never be edited to make CI"
+          echo "::error::pass. If the change is genuinely correct, put it in the PR body"
+          echo "::error::under a [NEEDS-AYUSH-APPROVAL] header with justification."
+          exit 1
+
+  # --- Gate: Conformance suites --------------------------------------------
+  # ARMS AT konflux M1. There is no parser yet, so there is nothing to conform.
+  # What is blocking today: the adapter harness exists, runs, and reports.
+  # M1 adds yaml-test-suite / JSONTestSuite at pinned revs and publishes the
+  # pass rates as badges, including the honest failure lists (§4.1 P4).
+  conformance:
+    name: gate/conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Conformance harness smoke
+        run: |
+          set -euo pipefail
+          echo "Phase 0: no format implementations exist, so no conformance claim is made."
+          echo "Blocking today: the harness crate builds and its runner is reachable."
+          cargo test -p core-verify --all-features
+          echo "ARMS AT konflux M1 — see MILESTONES.md."
+
+  # --- Gate: Differential suites -------------------------------------------
+  # ARMS AT konflux M2. Today this proves the external oracles CI depends on are
+  # present and behave as expected, so M2 does not discover that on day one.
+  differential:
+    name: gate/differential
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: External oracles are present and behave
+        shell: bash
+        run: |
+          set -euo pipefail
+          git --version
+
+          # `git merge-file` is konflux's first differential oracle (§8, §4.1 P3).
+          # A differential runner has to know BOTH of the oracle's behaviours, so
+          # both are pinned here.
+
+          # 1. Well-separated edits merge cleanly, exit 0.
+          printf 'a\nb\nc\nd\ne\nf\ng\n' > base.txt
+          printf 'A\nb\nc\nd\ne\nf\ng\n' > ours.txt
+          printf 'a\nb\nc\nd\ne\nf\nG\n' > theirs.txt
+          git merge-file -p ours.txt base.txt theirs.txt > merged.txt
+          diff -u <(printf 'A\nb\nc\nd\ne\nf\nG\n') merged.txt
+          echo "  oracle merges separated edits cleanly: OK"
+
+          # 2. Adjacent-line edits CONFLICT and exit non-zero — even though the
+          #    two changes touch different, unrelated values. This is konflux's
+          #    entire reason to exist, so the oracle's false-conflict behaviour is
+          #    pinned as a fixture rather than assumed.
+          printf 'a\nb\nc\n' > base2.txt
+          printf 'a\nB\nc\n' > ours2.txt
+          printf 'a\nb\nC\n' > theirs2.txt
+          if git merge-file -p ours2.txt base2.txt theirs2.txt > merged2.txt; then
+            echo "::error::git merge-file no longer conflicts on adjacent edits."
+            echo "::error::The differential baseline changed; retriage before trusting M2."
+            exit 1
+          fi
+          grep -q '<<<<<<<' merged2.txt
+          echo "  oracle false-conflicts on adjacent edits: OK (this is the gap konflux fills)"
+
+          echo "ARMS AT konflux M2 (jq, Mergiraf, DuckDB CLI, qpdf, cosign follow per phase)."
+
+  # --- Gate: Determinism check ---------------------------------------------
+  # "double-build + double-run output-hash compare" (MASTER_PLAN §8).
+  determinism:
+    name: gate/determinism
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Double build
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR=target/det-a cargo build --release -p xtask
+          CARGO_TARGET_DIR=target/det-b cargo build --release -p xtask
+      - name: Double run, compare output hashes
+        run: |
+          set -euo pipefail
+          ./target/det-a/release/xtask scaffold-report > run-a.json
+          ./target/det-b/release/xtask scaffold-report > run-b.json
+          ./target/det-a/release/xtask assert-equal run-a.json run-b.json
+      - name: Corpus manifests are pinned, capped and licence-clean (offline)
+        run: cargo run --release -p xtask -- corpus-verify
+
+  # --- Gate: Docs + MSRV ---------------------------------------------------
+  docs:
+    name: gate/docs
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --workspace --no-deps --all-features
+
+  msrv:
+    name: gate/msrv (1.90)
+    runs-on: ubuntu-latest
+    env:
+      # Overrides rust-toolchain.toml, which pins the day-to-day compiler.
+      RUSTUP_TOOLCHAIN: "1.90.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with: { toolchain: "1.90.0" }
+      - uses: Swatinem/rust-cache@v2
+      # Lints are checked on stable, not on the MSRV toolchain: an older clippy
+      # emits different diagnostics, and chasing that is not a proof of anything.
+      - run: cargo build --workspace --all-features
+      - run: cargo test --workspace --all-features
+
+  # --- Platform matrix (MASTER_PLAN §2) ------------------------------------
+  # "Linux x86_64 is the source of truth. Windows and macOS are release targets
+  #  built and smoke-tested in the matrix."
+  cross-platform:
+    name: gate/platform (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --all-features
+      # K3 is a cross-platform claim, so the determinism gate must run on every
+      # platform we ship to — not just on the runner that happens to be cheapest.
+      - name: Determinism (double-run)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release -p xtask
+          cargo run --release -p xtask -- scaffold-report > run-a.json
+          cargo run --release -p xtask -- scaffold-report > run-b.json
+          cargo run --release -p xtask -- assert-equal run-a.json run-b.json
+
+  # --- Shell scripts are code too ------------------------------------------
+  shellcheck:
+    name: gate/shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck corpora/fetch.sh
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=warning corpora/*.sh

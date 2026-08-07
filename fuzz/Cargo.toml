@@ -1,0 +1,29 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+description = "cargo-fuzz targets: one per format per operation (MASTER_PLAN §2, §3.3)."
+edition = "2024"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Detached from the parent workspace: cargo-fuzz builds on nightly with
+# sanitizer and libfuzzer link flags that must not leak into the main build.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+core-cst = { path = "../crates/core-cst" }
+
+[[bin]]
+name = "roundtrip_identity"
+path = "fuzz_targets/roundtrip_identity.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = true

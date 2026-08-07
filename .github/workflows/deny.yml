@@ -1,0 +1,33 @@
+##
+## Gate: Supply chain — MASTER_PLAN §8, "cargo-deny (advisories, licenses, bans)".
+##
+## Policy in deny.toml. Every new dependency also needs a one-line justification
+## in the PR (§2) — that part is a human review point, not a robot's.
+##
+name: deny
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Advisories land between our PRs; a weekly sweep catches them.
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deny:
+    name: gate/supply-chain (${{ matrix.check }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [advisories, bans, licenses, sources]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check ${{ matrix.check }}

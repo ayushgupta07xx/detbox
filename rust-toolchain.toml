@@ -1,0 +1,7 @@
+# Pinned so that a local run and a CI run are the same compiler.
+# Bumping this is an ADR-level change (it can change lint output, and therefore
+# what CI blocks on). See ADR-002.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

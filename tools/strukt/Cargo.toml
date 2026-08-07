@@ -1,0 +1,14 @@
+[package]
+name = "strukt"
+version = "0.0.0"
+description = "Deterministic query and edit for every config format."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

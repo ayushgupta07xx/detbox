@@ -1,0 +1,7 @@
+/target
+# `fuzz/` is a detached workspace with its own build output and crash artifacts.
+/fuzz/target
+/fuzz/artifacts
+# Determinism-gate scratch output.
+/run-a.json
+/run-b.json

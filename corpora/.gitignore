@@ -1,0 +1,18 @@
+# Fetched corpus content is NEVER committed (MASTER_PLAN §2, §10):
+# fetch scripts, not vendored copies. Upstream licences are respected by
+# fetching at a pinned SHA and recording the licence, not by redistributing.
+#
+# Note the `/**` rather than `/`: git cannot re-include a file whose parent
+# directory is itself excluded, so excluding the *contents* is what lets the
+# `.gitkeep` markers below survive.
+/helm-charts/**
+/kustomize/**
+/terraform/**
+/k8s-manifests/**
+/lockfiles/**
+/pdfs/**
+/csv/**
+
+# Keep the destination directories in the tree so the layout matches
+# MASTER_PLAN §2 in a fresh clone.
+!/*/.gitkeep
