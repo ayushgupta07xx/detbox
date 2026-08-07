@@ -2,6 +2,8 @@
 # `fuzz/` is a detached workspace with its own build output and crash artifacts.
 /fuzz/target
 /fuzz/artifacts
+# Spikes are detached workspaces with their own build output.
+/spikes/*/target
 # Determinism-gate scratch output.
 /run-a.json
 /run-b.json

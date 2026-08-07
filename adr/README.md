@@ -18,21 +18,18 @@ See [TEMPLATE.md](TEMPLATE.md).
 
 ## Numbering
 
-**ADR-001 is RESERVED** for the `core-cst` representation choice — green/red
-tree (rowan-style) vs owned token tree — made after a 2-day spike comparing edit
-ergonomics and memory footprint at konflux M1 (MASTER_PLAN §3.1). Do not use
-that number for anything else.
-
-Phase 0 ADRs therefore start at 002.
+ADR-001 was reserved for the `core-cst` representation choice and is now
+written, so numbering is contiguous from here. Phase 0's ADRs start at 002
+because 001 was held open for it.
 
 ## Index
 
 | ADR | Decision | Status |
 |---|---|---|
-| [001](.) | `core-cst` representation: green/red tree vs owned token tree | **reserved — konflux M1** |
-| [002](ADR-002-toolchain-and-msrv.md) | Pinned toolchain and MSRV 1.90 | proposed |
-| [003](ADR-003-phase-0-gate-arming.md) | Phase-0 gates are wired non-vacuously, and arm on a published schedule | proposed |
-| [004](ADR-004-corpus-by-pinned-fetch.md) | Corpora are fetched at pinned SHAs with exact yields, never vendored | proposed |
-| [005](ADR-005-determinism-gate-mechanism.md) | Determinism = double-build + double-run output-hash compare, with an in-repo SHA-256 | proposed |
-| [006](ADR-006-benchmark-baselines.md) | Benchmark baselines are named-and-uncalibrated until recorded on CI | proposed |
-| [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | proposed |
+| [001](ADR-001-cst-representation.md) | `core-cst` uses a green/red tree | proposed |
+| [002](ADR-002-toolchain-and-msrv.md) | Pinned toolchain and MSRV 1.90 | accepted |
+| [003](ADR-003-phase-0-gate-arming.md) | Phase-0 gates are wired non-vacuously, and arm on a published schedule | accepted |
+| [004](ADR-004-corpus-by-pinned-fetch.md) | Corpora are fetched at pinned SHAs with exact yields, never vendored | accepted |
+| [005](ADR-005-determinism-gate-mechanism.md) | Determinism = double-build + double-run output-hash compare, with an in-repo SHA-256 | accepted |
+| [006](ADR-006-benchmark-baselines.md) | Benchmark baselines are named-and-uncalibrated until recorded on CI | accepted |
+| [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | accepted |

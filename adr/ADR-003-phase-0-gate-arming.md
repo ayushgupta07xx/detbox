@@ -1,6 +1,6 @@
 # ADR-003: Phase-0 gates are wired non-vacuously, and arm on a published schedule
 
-**Date:** 2026-08-07 · **Status:** proposed
+**Date:** 2026-08-07 · **Status:** accepted (Phase 0 accepted 2026-08-07)
 
 ## Context
 

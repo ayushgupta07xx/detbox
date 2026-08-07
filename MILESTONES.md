@@ -25,8 +25,7 @@ bigsheet, konflux slides to Phase 4 (the kernel still gets built, via strukt).
       *Proof:* `cargo build --workspace` green.
 - [x] **Per-crate `DESIGN.md`** (§9.1) — scope, invariants, current milestone,
       proof obligations, for all 14 crates.
-- [x] **`ENGINEERING.md`** — distillation of §0, §8, §9, Appendix C. *Awaiting
-      Ayush's approval before commit.*
+- [x] **`ENGINEERING.md`** — distillation of §0, §8, §9, Appendix C.
 - [x] **No brand-named artifact** — virtual manifest, no multicall binary, no
       placeholder name anywhere (ADR-007, D1 unblocked).
 - [x] **Determinism hygiene enforced mechanically** — `clippy.toml` bans
@@ -57,10 +56,9 @@ bigsheet, konflux slides to Phase 4 (the kernel still gets built, via strukt).
 - [x] `gate/benchmark-baseline` — criterion vs saved baseline (ADR-006)
 - [x] `corpus/fetch` — scheduled; asserts exactly 1,000 files and that nothing
       fetched is committable
-- [!] **Verify all gates green on GitHub Actions.** Requires a push, which is
-      Ayush's call. Locally verified gates are listed in the Phase 0 Proof Delta;
-      miri, sanitizers, cargo-deny and cargo-fuzz are **not** installed on the
-      dev machine and are unverified until the first CI run.
+- [~] **Verify all gates green on GitHub Actions.** Pushed 2026-08-07. miri,
+      sanitizers, cargo-deny and cargo-fuzz are not installed on the dev machine
+      and are first exercised by CI — read that run before trusting them.
 
 #### Gate arming schedule (ADR-003)
 
@@ -90,20 +88,23 @@ blocking today against the weakest *true* statement available, and arm here:
 ### 0.4 ADRs
 
 - [x] ADR-002 toolchain + MSRV · ADR-003 gate arming · ADR-004 corpus ·
-      ADR-005 determinism · ADR-006 baselines · ADR-007 no brand-named artifacts
-- [!] All seven are `proposed`. They become `accepted` on Ayush's sign-off (§9.3).
-- [ ] **ADR-001 reserved** — `core-cst` representation, written at M1 after the
-      2-day spike.
+      ADR-005 determinism · ADR-006 baselines · ADR-007 no brand-named artifacts.
+      **Accepted** with Phase 0 on 2026-08-07.
+- [x] **ADR-001** — `core-cst` representation. Spike run, ADR written, `proposed`
+      and awaiting sign-off (§9.3).
 
 ### 0.5 Validation + decisions — [AYUSH]
 
 - [x] Draft r/devops post — `docs/validation/`
 - [x] Draft Ask HN post — `docs/validation/`
-- [!] **Post them.** Ayush handles all public communication, always.
+- [!] **Post them.** Ayush handles all public communication, always. **This is
+      Phase 0's actual exit gate (§11) and it is still open.**
 - [!] **D1** — umbrella brand + `<b>` binary name. Blocks the multicall binary
       and the crates.io/org/domain reservation.
 - [!] **D2** — Tauri confirmation (needed before Phase 3, bigsheet's grid).
-- [!] **D3** — flagship confirmation after the signal read. Blocks Phase 1.
+- [!] **D3** — flagship confirmation after the signal read. Blocks konflux M2
+      onward. M1 proceeds without it: §11 says a weak signal still builds the
+      kernel via strukt, so CST + K1 for YAML/JSON is needed either way.
 - [!] **D4** — final licence (`MIT OR Apache-2.0` is declared per §2/§10; the
       LICENSE files are not written pending D4).
 - [!] **Enable branch protection on `main`** so `CODEOWNERS` has teeth.
@@ -117,15 +118,22 @@ blocking today against the weakest *true* statement available, and arm here:
 **Launch gate (§4.1):** P1–P4 green in public CI, benchmark table *including
 where Mergiraf and diff3 win*, 60-second screencast, README per §12.
 
-**Blocked on:** Ayush accepting Phase 0, and **D3** (flagship confirmation).
+**Phase 0 accepted 2026-08-07.** M2 onward is blocked on **D3**; M1 is not
+(see §0.5).
 
 ### M1 — CST + K1 for YAML and JSON
 
 *Proof obligation: **P1** (round-trip). Gates: `gate/golden`, `fuzz-smoke`,
 `gate/conformance`, `gate/determinism`, `gate/miri`.*
 
-- [ ] **Spike (2 days):** green/red tree vs owned token tree — edit ergonomics
-      and memory footprint measured, not argued. → **ADR-001**.
+- [x] **Spike:** green/red vs owned token tree — plus a flat arena of spans,
+      added because excluding the obvious third option would have made the
+      comparison a formality. Measured on 750 real YAML files / 10,043,614 bytes:
+      memory by allocator counting, persistence cost, `locate` cost, K1, K2.
+      → **ADR-001: green/red tree** (`proposed`). Evidence:
+      `spikes/adr-001-cst-representation/`, reproducible in one command.
+      *Finding:* the owned token tree is **dominated** — §3.1's stated pair
+      contained a clear loser and the strongest challenger was not in it.
 - [ ] Oracle first: golden suites for YAML and JSON round-trip, seeded from the
       1,000-file corpus. **Confirm red.**
 - [ ] Oracle first: `yaml_roundtrip` and `json_roundtrip` fuzz targets. **Confirm

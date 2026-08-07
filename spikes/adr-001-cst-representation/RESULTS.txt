@@ -1,0 +1,33 @@
+  SKIPPED (no Word token to edit): corpora/k8s-manifests/kubernetes-examples/files/_archived/newrelic/newrelic-config.yaml
+ADR-001 spike — CST representation
+corpus: 750 YAML files, 10043614 bytes
+
+  representation          bytes/byte   tree bytes      allocs    v1+v2/v1     K1         K2*
+  ----------------------------------------------------------------------------------------------
+  A green/red (rowan)          5.19x     52085427     1872168       1.02x    750/750     749/749  
+  B owned token tree           7.71x     77484734     1378645       2.00x    750/750     749/749  
+  C flat arena of spans        3.91x     39296038      395285       2.00x    750/750     749/749  
+
+  nodes/tokens built (identical by construction):
+    A 235552 nodes, 983299 tokens
+    B 235552 nodes, 983299 tokens
+    C 235552 nodes, 983299 tokens
+
+  A token interning: 827758 hits / 983299 lookups = 84.2% reuse
+  allocations per input KiB:  A 190.9   B 140.6   C 40.301
+
+  one edit, PERSISTENT (pre-edit version stays live) — allocations:
+    A     6970   B  1379128   C     2996
+  one edit, DESTRUCTIVE (old version discarded) — allocations:
+    A     6970   B      525   C     1498     (A is immutable: no cheaper path exists)
+
+  locate(token) -> absolute source range, 750 files:
+    allocations:  A     2736   B        0   C        0
+    correct:      A   749/749   B   749/749   C   749/749  
+
+  * K2 is measured over files where an edit target exists (749 of 750 files).
+    1 file(s) had no Word token to edit and were SKIPPED, not passed.
+
+  timings — MACHINE-DEPENDENT, relative comparison only.
+  Not a published benchmark: no methodology page, no fixed runner (Appendix C).
+    build+serialize whole corpus:  A 99.10497ms   B 72.604853ms   C 38.451709ms

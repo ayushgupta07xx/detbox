@@ -1,6 +1,6 @@
 # ADR-005: Determinism = double-build + double-run output-hash compare, with an in-repo SHA-256
 
-**Date:** 2026-08-07 · **Status:** proposed
+**Date:** 2026-08-07 · **Status:** accepted (Phase 0 accepted 2026-08-07)
 
 ## Context
 

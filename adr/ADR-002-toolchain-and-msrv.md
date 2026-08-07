@@ -1,6 +1,6 @@
 # ADR-002: Pinned toolchain and MSRV 1.90
 
-**Date:** 2026-08-07 · **Status:** proposed
+**Date:** 2026-08-07 · **Status:** accepted (Phase 0 accepted 2026-08-07)
 
 ## Context
 

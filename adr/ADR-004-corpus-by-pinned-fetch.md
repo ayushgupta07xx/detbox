@@ -1,6 +1,6 @@
 # ADR-004: Corpora are fetched at pinned SHAs with exact yields, never vendored
 
-**Date:** 2026-08-07 · **Status:** proposed
+**Date:** 2026-08-07 · **Status:** accepted (Phase 0 accepted 2026-08-07)
 
 ## Context
 

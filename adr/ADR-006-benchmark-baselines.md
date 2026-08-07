@@ -1,6 +1,6 @@
 # ADR-006: Benchmark baselines are named-and-uncalibrated until recorded on CI
 
-**Date:** 2026-08-07 · **Status:** proposed
+**Date:** 2026-08-07 · **Status:** accepted (Phase 0 accepted 2026-08-07)
 
 ## Context
 

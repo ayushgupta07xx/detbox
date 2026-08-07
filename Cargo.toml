@@ -27,7 +27,10 @@ members = [
 ]
 # `fuzz/` is a detached workspace (cargo-fuzz convention: nightly-only,
 # libfuzzer-sys link flags must not leak into the main build).
-exclude = ["fuzz", "shell"]
+# `spikes/` are decision evidence, not product code: they are built and measured
+# once, cited by an ADR, and never shipped. Excluded so they never enter the
+# workspace build, the lint surface, or CI.
+exclude = ["fuzz", "shell", "spikes"]
 
 [workspace.package]
 edition = "2024"

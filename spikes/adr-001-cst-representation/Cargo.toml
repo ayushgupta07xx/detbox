@@ -1,0 +1,17 @@
+[package]
+name = "spike-cst-representation"
+version = "0.0.0"
+description = "ADR-001 evidence: three CST representations, measured on the real corpus."
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+# Detached from the workspace on purpose (see the root Cargo.toml `exclude`).
+# This is decision evidence, measured once and cited by ADR-001. It is not
+# product code, it never ships, and it is not subject to the workspace lint law.
+[workspace]
+
+[dependencies]
+
+[profile.release]
+debug = true

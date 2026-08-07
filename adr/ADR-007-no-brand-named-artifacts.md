@@ -1,6 +1,6 @@
 # ADR-007: No brand-named crate or binary exists until D1
 
-**Date:** 2026-08-07 · **Status:** proposed
+**Date:** 2026-08-07 · **Status:** accepted (Phase 0 accepted 2026-08-07)
 
 ## Context
 
