@@ -36,24 +36,38 @@ jobs:
       - run: cargo miri setup
       - name: miri test kernel crates
         env:
-          MIRIFLAGS: -Zmiri-strict-provenance
+          # -Zmiri-disable-isolation, not a skip list. core-verify's golden runner
+          # reads directories, and miri's sandbox refuses `opendir` by default.
+          # The choice was between excluding those tests from miri and letting
+          # miri reach the real filesystem; disabling isolation runs strictly more
+          # code under miri, and skipping tests to make a gate pass is the one
+          # thing MASTER_PLAN §8 forbids outright.
+          MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-disable-isolation
         run: |
           set -euo pipefail
           for crate in core-cst core-formats core-verify core-cli core-tui; do
             echo "::group::miri $crate"
-            # core-verify's golden runner touches the filesystem, which miri
-            # cannot model; its pure logic is covered by the unit tests above.
             cargo miri test -p "$crate" --lib || exit 1
             echo "::endgroup::"
           done
 
+  # MASTER_PLAN §8 names "ASan/UBSan jobs". Rust's `-Zsanitizer` has **no
+  # `undefined` option** — the accepted values are address, cfi, dataflow,
+  # hwaddress, kcfi, kernel-address, kernel-hwaddress, leak, memory, memtag,
+  # safestack, shadow-call-stack, thread, realtime. There is no UBSan for Rust
+  # to run, so the undefined-behaviour half of that row is carried by the `miri`
+  # job above, which is strictly better at it for Rust code.
+  #
+  # [NEEDS-AYUSH-APPROVAL] This is a deviation from §8's literal wording. It is
+  # not a loosening — nothing is skipped and miri covers UB — but §8 is law and
+  # the substitution is his to accept. See MILESTONES.md §0.2.
   sanitizers:
-    name: gate/sanitizers (ASan, UBSan)
+    name: gate/sanitizers (ASan, LSan)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, undefined]
+        sanitizer: [address, leak]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

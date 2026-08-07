@@ -112,9 +112,14 @@ fn cmd_assert_equal(args: &[String]) -> Result<String, String> {
          \n\
          Two runs of the same code on the same input produced different bytes.\n\
          This is invariant K3 (MASTER_PLAN §3.1) and it is not negotiable.\n\
-         Look for: HashMap iteration in an output path, a wall-clock read, an\n\
+         \n\
+         In the code: HashMap iteration in an output path, a wall-clock read, an\n\
          unstable sort, a platform path separator, or locale-dependent formatting\n\
-         (MASTER_PLAN §9.5).",
+         (MASTER_PLAN §9.5).\n\
+         \n\
+         In the harness: check the two runs actually had the same input. Writing\n\
+         run one's output into the directory run two reads will fail here and\n\
+         prove nothing about the code.",
         left.len(),
         sha256::hex(&left),
         right.len(),

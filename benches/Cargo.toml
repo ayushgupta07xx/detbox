@@ -9,7 +9,10 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-core-cst = { path = "../crates/core-cst" }
+# An explicit version, not just a path: cargo-deny reads a bare path
+# dependency as a wildcard requirement, and `bans.wildcards = "deny"`
+# (correctly) rejects it. Relaxing the ban would have been the wrong fix.
+core-cst = { path = "../crates/core-cst", version = "0.0.0" }
 
 [dev-dependencies]
 # Justification (MASTER_PLAN §2 dependency policy): criterion is named in §8 as

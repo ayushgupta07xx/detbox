@@ -16,7 +16,10 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-core-cst = { path = "../crates/core-cst" }
+# An explicit version, not just a path: cargo-deny reads a bare path
+# dependency as a wildcard requirement, and `bans.wildcards = "deny"`
+# (correctly) rejects it. Relaxing the ban would have been the wrong fix.
+core-cst = { path = "../crates/core-cst", version = "0.0.0" }
 
 [[bin]]
 name = "roundtrip_identity"

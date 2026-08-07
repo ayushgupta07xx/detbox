@@ -56,9 +56,31 @@ bigsheet, konflux slides to Phase 4 (the kernel still gets built, via strukt).
 - [x] `gate/benchmark-baseline` — criterion vs saved baseline (ADR-006)
 - [x] `corpus/fetch` — scheduled; asserts exactly 1,000 files and that nothing
       fetched is committable
-- [~] **Verify all gates green on GitHub Actions.** Pushed 2026-08-07. miri,
-      sanitizers, cargo-deny and cargo-fuzz are not installed on the dev machine
-      and are first exercised by CI — read that run before trusting them.
+- [~] **Verify all gates green on GitHub Actions.** First run 2026-08-07 was
+      **red in five places**, all real, all now fixed and reproduced locally
+      first. Recorded because a CI skeleton that was never run is not a gate:
+
+      | Gate | Failure | Fix |
+      |---|---|---|
+      | `gate/determinism`, `gate/platform` ×2 | **false positive** — CI wrote `run-a.json` into the repo root, so run two observed a tree containing run one's output | outputs go to `$RUNNER_TEMP`; the diagnostic now names self-observation as a cause |
+      | `gate/supply-chain (bans)` | a bare `path` dependency reads as a wildcard requirement, and `wildcards = "deny"` correctly rejected it | explicit `version` on path deps — **not** a relaxed ban |
+      | `gate/miri` | `opendir` unsupported under miri's isolation; the golden runner reads directories | `-Zmiri-disable-isolation`, so those tests run under miri rather than being excluded from it |
+      | `gate/sanitizers (undefined)` | Rust's `-Zsanitizer` has **no `undefined` value** — UBSan does not exist for Rust | matrix is now `address` + `leak`; UB is covered by miri. **[NEEDS-AYUSH-APPROVAL]**, see below |
+      | `fuzz-smoke` | cargo-fuzz defaulted to its musl host triple; a sanitizer cannot link against static libc | explicit `--target x86_64-unknown-linux-gnu` |
+
+      The determinism false positive is the one that mattered most: a gate that
+      cries wolf trains everyone to ignore red, which is worse than no gate.
+- [!] **[NEEDS-AYUSH-APPROVAL] §8 says "ASan/UBSan jobs".** There is no UBSan for
+      Rust — `-Zsanitizer` accepts address, cfi, dataflow, hwaddress, kcfi,
+      kernel-address, kernel-hwaddress, leak, memory, memtag, safestack,
+      shadow-call-stack, thread, realtime, and nothing named `undefined`. I have
+      substituted ASan + LSan, with undefined behaviour covered by the `miri`
+      job, which is strictly better at it for Rust. Nothing is skipped and no
+      threshold is loosened, but §8 is law and the substitution is yours to
+      accept or replace.
+- [ ] `actions/checkout@v4` emits a Node 20 deprecation warning on every job.
+      Bumping to v5 is a one-line change; left alone because a green run today
+      beats an untested action version.
 
 #### Gate arming schedule (ADR-003)
 

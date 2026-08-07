@@ -198,9 +198,14 @@ jobs:
       - name: Double run, compare output hashes
         run: |
           set -euo pipefail
-          ./target/det-a/release/xtask scaffold-report > run-a.json
-          ./target/det-b/release/xtask scaffold-report > run-b.json
-          ./target/det-a/release/xtask assert-equal run-a.json run-b.json
+          # Outputs go to $RUNNER_TEMP, NOT the repo. The report is a function of
+          # the repository tree, so writing run-a.json inside that tree makes run
+          # two observe a different input than run one — a false "determinism
+          # violation" that says nothing about the code. The first CI run of this
+          # gate failed exactly that way.
+          ./target/det-a/release/xtask scaffold-report > "$RUNNER_TEMP/run-a.json"
+          ./target/det-b/release/xtask scaffold-report > "$RUNNER_TEMP/run-b.json"
+          ./target/det-a/release/xtask assert-equal "$RUNNER_TEMP/run-a.json" "$RUNNER_TEMP/run-b.json"
       - name: Corpus manifests are pinned, capped and licence-clean (offline)
         run: cargo run --release -p xtask -- corpus-verify
 
@@ -253,10 +258,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # See the determinism job: outputs must live outside the observed tree.
           cargo build --release -p xtask
-          cargo run --release -p xtask -- scaffold-report > run-a.json
-          cargo run --release -p xtask -- scaffold-report > run-b.json
-          cargo run --release -p xtask -- assert-equal run-a.json run-b.json
+          cargo run --release -p xtask -- scaffold-report > "$RUNNER_TEMP/run-a.json"
+          cargo run --release -p xtask -- scaffold-report > "$RUNNER_TEMP/run-b.json"
+          cargo run --release -p xtask -- assert-equal "$RUNNER_TEMP/run-a.json" "$RUNNER_TEMP/run-b.json"
 
   # --- Shell scripts are code too ------------------------------------------
   shellcheck:
