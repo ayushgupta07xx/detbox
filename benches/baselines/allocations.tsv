@@ -1,0 +1,21 @@
+#! schema = 1
+#
+# THE PERFORMANCE GATE. Compared for EQUALITY, not within a tolerance.
+#
+# Allocations for parse+serialize over the committed golden cases. These numbers
+# are exact: identical across runs, across platforms, and across optimisation
+# levels (verified in both debug and release). There is no noise to tolerate.
+#
+# Why this and not timings: benches/baselines/linux-x86_64.tsv was calibrated
+# from a CI run on `main`, and the next run flagged a 43% regression on a parser
+# that had not changed by a byte. Six runs showed criterion measuring to within
+# ±1% inside a run while the same benchmark moved +38%/-20% between runs — and
+# the failing run was the FASTEST of six for three benchmarks and the slowest for
+# a fourth, so it was not simply a slow host. See ADR-006's second amendment.
+#
+# Fewer allocations is an improvement: record the new numbers. More is a
+# regression: explain it, then record them. Either way it is a reviewed change
+# (§8), and golden-guard covers this path.
+# format	cases	allocations	bytes
+json	18	2261	103550
+yaml	37	3130	125576
