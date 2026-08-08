@@ -12,6 +12,7 @@
 //! cargo xtask corpus-verify            offline validation of corpora/sources/*.sources
 //! cargo xtask corpus-survey            which YAML constructs the corpus contains
 //! cargo xtask corpus-k1                K1 over every corpus file (konflux P1)
+//! cargo xtask conformance-report       the published pass rates (konflux P4)
 //! cargo xtask parse-digest             K3 digest of parse+serialize per golden case
 //! cargo xtask alloc-profile            deterministic allocation counts (the perf gate)
 //! cargo xtask alloc-check <baseline>   compare that profile for equality
@@ -21,6 +22,7 @@
 
 mod alloc_profile;
 mod bench;
+mod conformance_report;
 mod corpus;
 mod fuzz_hours;
 mod k1;
@@ -51,6 +53,7 @@ fn main() -> ExitCode {
         "corpus-verify" => cmd_corpus_verify(),
         "corpus-survey" => cmd_corpus_survey(),
         "corpus-k1" => k1::run(&workspace_root()),
+        "conformance-report" => cmd_conformance_report(rest),
         "parse-digest" => parse_digest::run(&workspace_root()),
         "alloc-profile" => alloc_profile::run(&workspace_root()),
         "alloc-check" => cmd_alloc_check(rest),
@@ -86,6 +89,7 @@ fn usage() {
          \x20 corpus-verify                       validate corpora/sources/*.sources (offline)\n\
          \x20 corpus-survey                       which YAML constructs the corpus contains\n\
          \x20 corpus-k1                           K1 over every corpus file (konflux P1)\n\
+         \x20 conformance-report [--write]        published pass rates (konflux P4)\n\
          \x20 parse-digest                        K3 digest of parse+serialize per golden case\n\
          \x20 alloc-profile                       deterministic allocation counts (the perf gate)\n\
          \x20 alloc-check <baseline>              compare that profile for equality\n\
@@ -161,6 +165,15 @@ fn cmd_corpus_verify() -> Result<String, String> {
 
 fn cmd_corpus_survey() -> Result<String, String> {
     survey::run(&workspace_root())
+}
+
+fn cmd_conformance_report(args: &[String]) -> Result<String, String> {
+    let write = match args.first().map(String::as_str) {
+        None => false,
+        Some("--write") => true,
+        Some(other) => return Err(format!("conformance-report: unknown flag `{other}`")),
+    };
+    conformance_report::run(&workspace_root(), write)
 }
 
 fn cmd_alloc_check(args: &[String]) -> Result<String, String> {

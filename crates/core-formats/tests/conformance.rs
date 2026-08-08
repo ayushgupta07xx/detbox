@@ -3,10 +3,11 @@
 //! MASTER_PLAN §3.3 and §4.1 **P4**: pass rates published as badges, *"including
 //! honest failure lists"*.
 //!
-//! **RED, deliberately.** konflux M1 is at the oracle stage. `parse` is stubbed,
-//! so `conformance/thresholds.tsv` records `unrecorded` for every rate and the
-//! ratchet refuses to pass. Once a parser lands, the measured rates get recorded
-//! as a reviewed change and the ratchet starts holding them.
+//! **Armed at konflux M1.** Both parsers exist, all four rates are recorded in
+//! `conformance/thresholds.tsv`, and the ratchet now holds them: a rate that
+//! drops fails here, and lowering the recorded claim needs sign-off (§8).
+//! `conformance/REPORT.md` is the publication, regenerated and byte-compared by
+//! the last test in this file.
 //!
 //! # Requires the suites
 //!
@@ -22,7 +23,7 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
 use core_formats::{Format, Json, Yaml};
-use core_verify::conformance::{self, Case, Expectation, Verdict};
+use core_verify::conformance::{self, Case, Verdict};
 use std::path::{Path, PathBuf};
 
 fn conformance_dir() -> PathBuf {
@@ -39,8 +40,9 @@ fn require(dir: &Path, suite: &str) {
     );
 }
 
-/// Verdict adapter. Today `parse` always fails, so this is always `Rejected` —
-/// which is precisely why accept-rate and reject-rate are never blended.
+/// Verdict adapter: a tree means accepted, an error means refused. ADR-008 puts
+/// the line at structure — a spec violation is refused, an unmodelled construct
+/// is kept verbatim.
 fn verdict_of<F: Format>(format: &F) -> impl Fn(&[u8]) -> Verdict + '_ {
     move |bytes: &[u8]| {
         if format.parse(bytes).is_ok() {
@@ -49,80 +51,6 @@ fn verdict_of<F: Format>(format: &F) -> impl Fn(&[u8]) -> Verdict + '_ {
             Verdict::Rejected
         }
     }
-}
-
-/// JSONTestSuite encodes the expectation in the filename:
-/// `y_` must parse, `n_` must be rejected, `i_` is implementation-defined.
-fn json_cases(root: &Path) -> Vec<Case> {
-    let dir = root.join("test_parsing");
-    let mut cases = Vec::new();
-    let entries =
-        std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()));
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if path.extension().is_none_or(|e| e != "json") {
-            continue;
-        }
-        let expectation = if name.starts_with("y_") {
-            Expectation::MustAccept
-        } else if name.starts_with("n_") {
-            Expectation::MustReject
-        } else if name.starts_with("i_") {
-            Expectation::ImplementationDefined
-        } else {
-            continue;
-        };
-        cases.push(Case {
-            name: name.to_string(),
-            bytes: std::fs::read(&path).expect("case is readable"),
-            expectation,
-        });
-    }
-    cases
-}
-
-/// yaml-test-suite's `data` layout: one directory per case holding `in.yaml`,
-/// plus an `error` marker file when the case must be rejected. Nested
-/// `<ID>/<NN>/` directories are multi-document cases and count separately.
-fn yaml_cases(root: &Path) -> Vec<Case> {
-    let cases_dir = root.join("cases");
-    let mut cases = Vec::new();
-    let mut stack = vec![cases_dir.clone()];
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            }
-        }
-        let input = dir.join("in.yaml");
-        if !input.is_file() {
-            continue;
-        }
-        let name = dir
-            .strip_prefix(&cases_dir)
-            .unwrap_or(&dir)
-            .components()
-            .filter_map(|c| c.as_os_str().to_str())
-            .collect::<Vec<_>>()
-            .join("/");
-        cases.push(Case {
-            name,
-            bytes: std::fs::read(&input).expect("case is readable"),
-            expectation: if dir.join("error").is_file() {
-                Expectation::MustReject
-            } else {
-                Expectation::MustAccept
-            },
-        });
-    }
-    cases
 }
 
 /// Everything we accept must round-trip.
@@ -195,7 +123,7 @@ fn json_test_suite() {
     require(&root, "json-test-suite");
     // 95 must-accept + 188 must-reject + 35 implementation-defined, at the
     // pinned commit. Asserted by conformance/fetch.sh as well.
-    let cases = json_cases(&root);
+    let cases = conformance::json_test_suite(&root).expect("suite is readable");
     let checked = assert_accepted_cases_round_trip(&Json, &cases);
     println!("K1 verified on {checked} accepted JSONTestSuite documents");
     run_suite("json-test-suite", cases, 318, verdict_of(&Json));
@@ -206,5 +134,84 @@ fn yaml_test_suite() {
     let root = conformance_dir().join("yaml-test-suite");
     require(&root, "yaml-test-suite");
     // 308 must-accept + 94 must-reject, at the pinned commit.
-    run_suite("yaml-test-suite", yaml_cases(&root), 402, verdict_of(&Yaml));
+    let cases = conformance::yaml_test_suite(&root).expect("suite is readable");
+    run_suite("yaml-test-suite", cases, 402, verdict_of(&Yaml));
+}
+
+/// The published pass rates must be the ones this run measures — **P4**.
+///
+/// `conformance/REPORT.md` is the only place konflux's conformance numbers are
+/// written down where they outlive a CI log, and the only place the failure
+/// list appears in full rather than as "the first 15 of 77". A published number
+/// nothing re-derives is a number that drifts, so this regenerates the file
+/// from the pinned suites and byte-compares.
+///
+/// It closes both directions at once. Improve the parser without regenerating
+/// and the published rate is stale; hand-edit the published rate and it stops
+/// matching the parser. Either way the gate is red, and neither can be fixed by
+/// editing this file — the fix is `cargo xtask conformance-report --write`.
+#[test]
+fn the_published_report_is_what_this_run_measures() {
+    let dir = conformance_dir();
+    require(&dir.join("json-test-suite"), "json-test-suite");
+    require(&dir.join("yaml-test-suite"), "yaml-test-suite");
+
+    let measured = conformance::publish_report(&dir, verdict_of(&Json), verdict_of(&Yaml))
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    let path = dir.join("REPORT.md");
+    let published = std::fs::read_to_string(&path).unwrap_or_default();
+
+    if published == measured {
+        println!(
+            "published report matches this run ({} bytes, {})",
+            measured.len(),
+            path.display()
+        );
+        return;
+    }
+
+    let at = published
+        .lines()
+        .zip(measured.lines())
+        .position(|(a, b)| a != b);
+    let detail = at.map_or_else(
+        || {
+            format!(
+                "identical for the first {} line(s), then one side ends: \
+                 published {} lines, measured {} lines",
+                published.lines().count().min(measured.lines().count()),
+                published.lines().count(),
+                measured.lines().count()
+            )
+        },
+        |line| {
+            format!(
+                "first difference at line {}:\n    published: {}\n    measured:  {}",
+                line + 1,
+                published.lines().nth(line).unwrap_or("<absent>"),
+                measured.lines().nth(line).unwrap_or("<absent>"),
+            )
+        },
+    );
+
+    panic!(
+        "\nPUBLISHED CONFORMANCE REPORT IS STALE\n\
+         \n\
+         {}\n\
+         {detail}\n\
+         \n\
+         konflux P4 publishes conformance pass rates \"including honest failure\n\
+         lists\". This file is that publication, and it no longer describes what\n\
+         the parser does.\n\
+         \n\
+         Regenerate it — never hand-edit it:\n\
+         \n\
+         \x20   conformance/fetch.sh && cargo xtask conformance-report --write\n\
+         \n\
+         Then read the diff. A rate that moved down is a regression the ratchet in\n\
+         thresholds.tsv should also have caught; a rate that moved up is a\n\
+         threshold worth raising in the same PR.\n",
+        path.display()
+    );
 }

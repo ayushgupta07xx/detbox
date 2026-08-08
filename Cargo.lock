@@ -459,6 +459,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "core-formats",
+ "core-verify",
 ]
 
 [[package]]
