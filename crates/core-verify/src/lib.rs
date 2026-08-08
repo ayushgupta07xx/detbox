@@ -40,3 +40,4 @@
 //! §8 golden gate is wired and non-vacuous from commit one (ADR-003).
 
 pub mod golden;
+pub mod roundtrip;

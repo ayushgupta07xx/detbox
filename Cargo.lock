@@ -120,6 +120,10 @@ version = "0.0.0"
 [[package]]
 name = "core-formats"
 version = "0.0.0"
+dependencies = [
+ "core-cst",
+ "core-verify",
+]
 
 [[package]]
 name = "core-tui"

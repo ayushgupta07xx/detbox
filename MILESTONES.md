@@ -156,8 +156,30 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       `spikes/adr-001-cst-representation/`, reproducible in one command.
       *Finding:* the owned token tree is **dominated** — §3.1's stated pair
       contained a clear loser and the strongest challenger was not in it.
-- [ ] Oracle first: golden suites for YAML and JSON round-trip, seeded from the
-      1,000-file corpus. **Confirm red.**
+- [x] Oracle first: golden suites for YAML and JSON round-trip. **Confirmed red
+      2026-08-08: 47 of 47 cases fail, all with one cause (no parser), zero
+      byte-mismatch failures.**
+      - Contract landed: `core-cst` green/red types per ADR-001 + `Cst::serialize`;
+        `core-formats::Format` with `parse`/`serialize`; `core-verify::roundtrip`.
+      - "Seeded from the corpus" read as *the corpus decides what the cases must
+        cover*, not *copy corpus files in* — copying would vendor third-party
+        bytes ADR-004 exists to avoid. `cargo xtask corpus-survey` measures the
+        constructs; 17 YAML cases are corpus-derived with their shares recorded,
+        12 more cover spec constructs the corpus happens not to contain.
+      - A round-trip case has **no `expected` file** — the input is the
+        expectation, so a K1 case cannot be doctored, only deleted.
+      - *Finding:* **41.2% of corpus YAML contains Helm's `{{ }}`**, which is not
+        YAML at all. §3.1 frames the verbatim escape hatch as a fallback for
+        exotic tags; the corpus says it is the main path for two files in five.
+      - *Defect found and fixed:* the deep-nesting test caught the **destructor**,
+        not the serializer — dropping a refcounted tree recursed and aborted the
+        process with `SIGABRT`. `core-cst` now has an iterative `Drop`. Recorded
+        as a consequence in ADR-001 that the original decision missed.
+- [!] **JSON has no corpus.** The fetched corpus is 750 `.yaml` + 250 `.tf` and
+      contains no JSON, so konflux **P1** (K1 on ≥1,000 real files) is currently
+      unmet for half of M1's promise. The 18 JSON cases are grammar-derived.
+      Adding a JSON corpus source changes what the proofs run against and is a
+      reviewed change to evidence (§9.3, ADR-004) — yours to approve.
 - [ ] Oracle first: `yaml_roundtrip` and `json_roundtrip` fuzz targets. **Confirm
       red.**
 - [ ] Oracle first: yaml-test-suite + JSONTestSuite adapters at pinned revs,

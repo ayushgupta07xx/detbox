@@ -10,6 +10,7 @@
 //! cargo xtask hash <file>              SHA-256 of a file, lowercase hex
 //! cargo xtask assert-equal <a> <b>     byte-compare two files; exit 1 if they differ
 //! cargo xtask corpus-verify            offline validation of corpora/sources/*.sources
+//! cargo xtask corpus-survey            which YAML constructs the corpus contains
 //! cargo xtask bench-compare <dir> <baseline>   criterion output vs saved baseline
 //! ```
 
@@ -17,6 +18,7 @@ mod bench;
 mod corpus;
 mod report;
 mod sha256;
+mod survey;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -34,6 +36,7 @@ fn main() -> ExitCode {
         "hash" => cmd_hash(rest),
         "assert-equal" => cmd_assert_equal(rest),
         "corpus-verify" => cmd_corpus_verify(),
+        "corpus-survey" => cmd_corpus_survey(),
         "bench-compare" => cmd_bench_compare(rest),
         "-h" | "--help" | "help" => {
             usage();
@@ -63,6 +66,7 @@ fn usage() {
          \x20 hash <file>                         SHA-256 of a file, lowercase hex\n\
          \x20 assert-equal <a> <b>                byte-compare two files\n\
          \x20 corpus-verify                       validate corpora/sources/*.sources (offline)\n\
+         \x20 corpus-survey                       which YAML constructs the corpus contains\n\
          \x20 bench-compare <dir> <baseline>      criterion output vs saved baseline"
     );
 }
@@ -130,6 +134,10 @@ fn cmd_assert_equal(args: &[String]) -> Result<String, String> {
 fn cmd_corpus_verify() -> Result<String, String> {
     corpus::verify(&workspace_root().join("corpora/sources"))
         .map_err(|problems| format!("corpus manifests are invalid:\n{problems}"))
+}
+
+fn cmd_corpus_survey() -> Result<String, String> {
+    survey::run(&workspace_root())
 }
 
 fn cmd_bench_compare(args: &[String]) -> Result<String, String> {
