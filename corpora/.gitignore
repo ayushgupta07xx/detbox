@@ -6,6 +6,7 @@
 # directory is itself excluded, so excluding the *contents* is what lets the
 # `.gitkeep` markers below survive.
 /helm-charts/**
+/json/**
 /kustomize/**
 /terraform/**
 /k8s-manifests/**

@@ -70,7 +70,7 @@ bigsheet, konflux slides to Phase 4 (the kernel still gets built, via strukt).
 
       The determinism false positive is the one that mattered most: a gate that
       cries wolf trains everyone to ignore red, which is worse than no gate.
-- [!] **[NEEDS-AYUSH-APPROVAL] §8 says "ASan/UBSan jobs".** There is no UBSan for
+- [x] **Accepted 2026-08-08.** §8 says "ASan/UBSan jobs". There is no UBSan for
       Rust — `-Zsanitizer` accepts address, cfi, dataflow, hwaddress, kcfi,
       kernel-address, kernel-hwaddress, leak, memory, memtag, safestack,
       shadow-call-stack, thread, realtime, and nothing named `undefined`. I have
@@ -274,10 +274,18 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
 - [x] **P1 (corpus half): K1 green on 750/750 corpus YAML files**, 10,043,614
       bytes, zero violations and zero rejections. `cargo xtask corpus-k1`, wired
       into the `corpus` CI job.
-- [!] **P1 is NOT met as written.** It asks for ≥1,000 real-world files; the
-      corpus is 750 YAML + 250 HCL, and HCL is Phase 2. Only 750 files are in a
-      format konflux's MVP speaks. Closing this needs more YAML/JSON corpus
-      sources — a reviewed change to evidence (§9.3, ADR-004), yours to approve.
+- [x] **P1 corpus half: MET.** Approved 2026-08-08, so 250 real-world JSON files
+      were added (SchemaStore schemas + test instances, Apache-2.0, pinned).
+      **K1 holds on 1,000/1,000 files** in a format konflux parses — 750 YAML
+      (10,043,614 bytes) and 250 JSON (4,883,405 bytes) — zero violations, zero
+      rejections. The 250 HCL files stay in the corpus, unparsed, until Phase 2.
+      - The 250 JSON files round-tripped **on first contact**, with no parser
+        change. Real third-party input the parser had never seen.
+      - `corpus-k1` now reports MET or NOT MET against the ≥1,000 threshold
+        instead of always warning. Under-claiming a proof is as misleading as
+        over-claiming one.
+- [ ] **P1 fuzzing half:** ≥72 cumulative hours with zero violations. The nightly
+      job accumulates it; there is no counter yet.
 - [!] **GATE before M3:** yaml-test-suite reject-rate is **1.1%**. A lossless
       structural parser detects almost no invalid YAML, which is harmless at M1
       and dangerous the moment a merge exists — structurally merging a document
