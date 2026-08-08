@@ -274,7 +274,7 @@ fn escape(bytes: &[u8], start: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{Cause, SuiteError, run_dir};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     fn fixture_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("core-verify-roundtrip-{name}"));
@@ -283,7 +283,7 @@ mod tests {
         dir
     }
 
-    fn write(dir: &PathBuf, name: &str, bytes: &[u8]) {
+    fn write(dir: &Path, name: &str, bytes: &[u8]) {
         std::fs::write(dir.join(name), bytes).expect("write fixture");
     }
 
