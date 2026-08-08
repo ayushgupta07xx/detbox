@@ -40,6 +40,7 @@ forever.
 | `tools/` | konflux · strukt · bigsheet · pdfsurgeon · veritas · lockproof · coverify · replaylab · cage |
 | `shell/` | Phase 6. README only, deliberately |
 | `corpora/` | Fetch scripts at pinned SHAs — never vendored copies |
+| `conformance/` | Official suites at pinned revs; [REPORT.md](conformance/REPORT.md) publishes the rates and the full failure list |
 | `benches/` `fuzz/` `xtask/` | Criterion · cargo-fuzz · repo automation |
 | `.github/workflows/` | The CI law (§8) |
 

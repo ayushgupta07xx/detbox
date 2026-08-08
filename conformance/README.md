@@ -28,18 +28,32 @@ licence file, so the licence comes from a separately pinned `main` commit —
 
 ## Two rates, never one
 
-See [ADR-008](../adr/ADR-008-conformance-semantics.md). With today's stubbed
-parser, which does nothing but return `Err`:
+See [ADR-008](../adr/ADR-008-conformance-semantics.md). Measured before a parser
+existed, when `parse` did nothing but return `Err`:
 
 ```
 json-test-suite: accept 0/95 (0.0%)   reject 188/188 (100.0%)
 yaml-test-suite: accept 0/308 (0.0%)  reject 94/94  (100.0%)
 ```
 
-Blended, those would publish **66.4%** and **23.4%** conformance — from a
+Blended, those would have published **66.4%** and **23.4%** conformance — from a
 function whose entire body is `return Err`. So there is no blended figure and no
 method to compute one. Both rates ratchet independently, so accepting more can
 never be paid for by rejecting less.
+
+## `REPORT.md` — the publication
+
+[`REPORT.md`](REPORT.md) is **generated**, never hand-written:
+
+```bash
+cargo xtask conformance-report --write
+```
+
+It carries both rates per suite, the pin each was measured at, and the failure
+list **in full** — all 77, not the first 15 a console prints. `gate/conformance`
+regenerates it and byte-compares, so an edited number fails the build instead of
+becoming a claim, and an improvement that was never republished is equally red.
+See [ADR-009](../adr/ADR-009-publishing-conformance-rates.md).
 
 ## `thresholds.tsv`
 
@@ -53,5 +67,18 @@ deterministic, unlike a benchmark baseline that may honestly be `uncalibrated`
 
 ## Status
 
-**RED.** Every threshold is `unrecorded` because there is no parser. The first
-real rates get recorded at M1, under review.
+**Armed at konflux M1** (ADR-003). All four rates are recorded and published:
+
+| Suite | Accept | Reject |
+|---|---|---|
+| json-test-suite | 100.0% | 100.0% |
+| yaml-test-suite | 100.0% | 18.1% |
+
+Those four numbers are duplicated from `REPORT.md` for the reader's convenience
+and are **not** the claim — `thresholds.tsv` is the claim and `REPORT.md` is the
+measurement. If this table and `REPORT.md` ever disagree, `REPORT.md` is right
+and this one is a typo.
+
+**P4 is not complete.** §4.1 names three suites and toml-test is the third;
+`toml` arrives with strukt in Phase 2, so P4 finishes there. The yaml reject rate
+is also a standing gate before M3 (MILESTONES).
