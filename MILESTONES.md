@@ -1,5 +1,47 @@
 # MILESTONES
 
+## Where things stand — read this first
+
+**Updated 2026-08-09.** This section is the session handoff: a new session should
+need this file, `ENGINEERING.md` and the ADRs, and nothing else.
+
+**Done.** Phase 0 accepted. konflux **M1 complete**: `core-cst` (green/red tree,
+ADR-001), `core-formats` with YAML and JSON parsers, and every M1 oracle green.
+
+| Proof | State |
+|---|---|
+| K1 golden | 37 YAML + 18 JSON, all passing |
+| K1 corpus (**P1** half 1) | **1,000/1,000 files**, 14.9 MB, zero violations — MET |
+| K1 fuzzing (**P1** half 2) | **0.00 of 72 hours** on the current parser — NOT MET |
+| Conformance JSON | accept 100%, reject 100% |
+| Conformance YAML | accept 100%, reject 18.1% |
+| K3 determinism | double-build + double-run, 3 platforms |
+| Performance | allocation counts, exact equality (ADR-006 amendment 2) |
+
+**Blocked on Ayush — nothing else can start.**
+
+1. **D3, the flagship call (konflux or bigsheet).** Blocks M2 and everything
+   after it. §11 makes D3 a read of the validation-post signal, and the two
+   drafts in `docs/validation/` are **not posted** as far as this file knows.
+   That is the critical path.
+2. **PR #4** open: the fuzz-hours ledger.
+
+**Not blocked, but only time will fix it.** P1's fuzzing half accrues ~2 hours
+per night and resets whenever `core-cst`, `core-formats` or the fuzz targets
+change. Roughly five weeks of a stationary parser.
+
+**Standing gate before M3.** The YAML reject-rate is 18.1%. The remaining 77
+must-reject cases need block/flow context tracking, which *is* `semantic_view`
+at M2. Merging a document we failed to recognise as invalid is the "silently
+wrong" failure §0 ranks first, so this must rise before M3 ships a merge.
+
+**Accepted decisions**, so a new session does not re-litigate them: ADR-001
+through ADR-008 all accepted; the ASan/LSan substitution for §8's "ASan/UBSan"
+accepted (Rust has no UBSan; miri covers it); the corpus expansion to 1,250
+files accepted.
+
+---
+
 Live checklist, one section per phase (MASTER_PLAN §9.1). One item per session
 (§9.2). Every item names the proof obligation it discharges and the §8 gate that
 enforces it.
