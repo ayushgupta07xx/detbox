@@ -136,9 +136,34 @@ bigsheet, konflux slides to Phase 4 (the kernel still gets built, via strukt).
       test and had to be cancelled. Every job is now capped, and miri is
       installed on the dev machine — it had caught two problems in two sessions,
       both discovered only in CI, which is one more than a local toolchain costs.
-- [ ] `actions/checkout@v4` emits a Node 20 deprecation warning on every job.
-      Bumping to v5 is a one-line change; left alone because a green run today
-      beats an untested action version.
+- [x] **`actions/checkout` bumped v4 → v7**, 20 call sites across 7 workflows.
+      The reason to leave it alone had inverted: the warning now reads *"target
+      Node.js 20 but are being **forced to run on Node.js 24**"*, so v4 was
+      already executing on a runtime it does not target. Staying put stopped
+      being the conservative option.
+      - **v7, not the v5 this line named.** v5 was current when the line was
+        written and is now two majors behind, so bumping to it would buy one
+        more bump. Measured before choosing: the only breaking changes across
+        v5→v7 are `allow-unsafe-pr-checkout` and blocking fork checkout for
+        `pull_request_target` / `workflow_run`. **No workflow here uses either
+        trigger** — all seven are `push` / `pull_request` / `schedule` /
+        `workflow_dispatch` — so none of it reaches us.
+      - **Only `checkout` was affected**, and that was measured rather than
+        assumed: the warning on a job using `rust-toolchain` + `rust-cache`, and
+        on one additionally using `install-action` + `upload-artifact`, names
+        `actions/checkout@v4` and nothing else. The other five actions are
+        already on Node 24, so this is the whole fix, not the first of five.
+      - `fetch-depth: 0` is unchanged across these majors, which matters twice:
+        `golden-guard` needs it for the base/head diff and the fuzz-hours ledger
+        needs it for `git merge-base --is-ancestor`. Both verified intact.
+- [ ] **Actions are pinned to moving major tags, and our own fetch scripts
+      refuse to be.** `corpora/fetch.sh` and `conformance/fetch.sh` both reject
+      anything that is not a 40-char SHA — *"Never a branch or a tag: those
+      move"* — while the CI that enforces that discipline pins its seven actions
+      to `@v7`, `@v2`, `@stable`, which move under us. Pinning actions by SHA
+      would close it. Not done here: it is ~58 call sites and a supply-chain
+      policy change touching §8/§10, so it is ADR-shaped and Ayush's call.
+      **Say the word and I will write it.**
 
 #### Gate arming schedule (ADR-003)
 

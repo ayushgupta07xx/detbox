@@ -33,7 +33,7 @@ jobs:
       matrix:
         target: [yaml_roundtrip, json_roundtrip]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: ". -> target\nfuzz -> fuzz/target" }
@@ -73,7 +73,7 @@ jobs:
     needs: long
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         # Full history: the ledger asks git whether each run's commit descends
         # from the last change to the fuzzed code, and a shallow clone cannot
         # answer that.
