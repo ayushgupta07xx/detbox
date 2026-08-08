@@ -33,7 +33,7 @@ jobs:
     # until GitHub's 6-hour default. Found the expensive way (§10).
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
         with: { components: miri }
       - uses: Swatinem/rust-cache@v2
@@ -74,7 +74,7 @@ jobs:
       matrix:
         sanitizer: [address, leak]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
         with: { components: rust-src }
       - uses: Swatinem/rust-cache@v2

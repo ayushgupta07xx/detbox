@@ -28,7 +28,7 @@ jobs:
       matrix:
         check: [advisories, bans, licenses, sources]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Deliberately not EmbarkStudios/cargo-deny-action: it runs in a musl
       # container that cannot satisfy rust-toolchain.toml, which produces a
       # confusing "toolchain not installed" error next to the real finding.
