@@ -78,6 +78,12 @@ bigsheet, konflux slides to Phase 4 (the kernel still gets built, via strukt).
       job, which is strictly better at it for Rust. Nothing is skipped and no
       threshold is loosened, but §8 is law and the substitution is yours to
       accept or replace.
+- [x] **No workflow job had `timeout-minutes`.** A single slow test could burn
+      free-tier minutes until GitHub's 6-hour default, against §10's budget
+      constraint. Found when `gate/miri` ran 19 minutes on a 100,000-node drop
+      test and had to be cancelled. Every job is now capped, and miri is
+      installed on the dev machine — it had caught two problems in two sessions,
+      both discovered only in CI, which is one more than a local toolchain costs.
 - [ ] `actions/checkout@v4` emits a Node 20 deprecation warning on every job.
       Bumping to v5 is a one-line change; left alone because a green run today
       beats an untested action version.
