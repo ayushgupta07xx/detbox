@@ -21,9 +21,17 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-/// Phase 0 corpus ceiling. konflux P1 requires ≥1,000 real-world files; this is
-/// that number, and it is the *initial* cap — raising it is a deliberate act.
-pub(crate) const GLOBAL_FILE_CAP: u32 = 1_000;
+/// Corpus ceiling.
+///
+/// Started at 1,000 in Phase 0, matching konflux P1's "≥1,000 real-world files".
+/// Raised to 1,250 at M1, with approval, once `corpus-k1` showed the flaw in
+/// that arithmetic: 250 of the original 1,000 were Terraform, HCL is Phase 2,
+/// and so only 750 files were in a format konflux's MVP could parse. Adding 250
+/// JSON files brings the **in-format** count to 1,000, which is what P1 actually
+/// asks for. The HCL stays, unparsed until Phase 2.
+///
+/// Raising this is a deliberate act, not a side effect.
+pub(crate) const GLOBAL_FILE_CAP: u32 = 1_250;
 
 /// Licences under which we are willing to fetch third-party files into a test
 /// corpus. Anything else needs a decision, not a default.
@@ -320,7 +328,9 @@ mod tests {
 
     #[test]
     fn the_global_cap_is_the_documented_one() {
-        // Phase 0 instruction: cap the initial corpus at ~1,000 files.
-        assert_eq!(GLOBAL_FILE_CAP, 1_000);
+        // 750 YAML + 250 JSON = 1,000 files konflux's MVP parses (P1), plus 250
+        // HCL waiting for Phase 2. Changing this number is a decision, and this
+        // test is what makes it one.
+        assert_eq!(GLOBAL_FILE_CAP, 1_250);
     }
 }
