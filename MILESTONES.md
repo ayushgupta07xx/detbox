@@ -308,11 +308,18 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         than a silent one.
 - [ ] Arm `gate/conformance` — publish pass rates **with the honest failure
       list** (P4).
-- [~] Record calibrated benchmark baselines from a run on `main` (ADR-006).
-      Names are recorded and the structural checks are blocking; the numbers stay
-      `uncalibrated` until taken from a CI run, since laptop timings are not
-      comparable to a shared runner and publishing them as if they were would be
-      a cherry-picked benchmark (Appendix C).
+- [x] **Calibrated benchmark baselines**, recorded from the bench job on `main`
+      at `9ef31af` (ADR-006). The regression gate is now numeric, not just
+      structural.
+      - Tolerances are **per-benchmark**, because noise is. Measured over three
+        CI runs: spread ranged from 1.3% (`json_parse_real`) to 7.6%
+        (`yaml_parse_small`). A single global figure would flake on the small
+        benchmarks or go blind on the large ones. Each is ~3x its observed
+        spread, floored at 10%; `n=3` is thin, so they start loose and tighten
+        as samples accumulate.
+      - Confirms ADR-006's refusal to calibrate locally: the same benchmarks run
+        **30–38% faster on the dev machine** than on the shared runner. Laptop
+        numbers would have made every CI run a regression.
 - [ ] **P1 partial:** K1 green on all 1,000 corpus files. *Output required.*
 
 ### M2 — Structural diff
