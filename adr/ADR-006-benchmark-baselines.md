@@ -48,6 +48,38 @@ versions, exact commands, raw data in-repo, a reproduction one-liner, and the
 cells where incumbents win. bigsheet's P4 is a performance *budget*, not a
 proof; that wording does not drift.
 
+## Amendment, 2026-08-08: calibrated, with per-benchmark tolerances
+
+The baselines are now calibrated from the bench job on `main` at `9ef31af`, as
+this ADR required. Doing so produced the variance data this decision asked for,
+and it changed one thing.
+
+Measured across three CI runs on `ubuntu-latest`:
+
+| benchmark | main run (ns) | run-to-run spread |
+|---|---:|---:|
+| `json_parse_real` | 11,355.2 | 1.3% |
+| `yaml_parse_64kib` | 1,352,928.0 | 2.9% |
+| `json_parse_64kib` | 61,243.4 | 4.2% |
+| `yaml_parse_real` | 8,742.2 | 4.6% |
+| `yaml_parse_small` | 3,323.2 | **7.6%** |
+
+A single `tolerance_pct` would have held here, but only just: 7.6% against a 10%
+threshold, on three samples. The cause is not a badly written benchmark — the
+same absolute jitter is a very different fraction of a 3.5 µs measurement than of
+a 1.3 ms one. One global figure must therefore either flake on the small
+benchmarks or go blind on the large ones.
+
+So the baseline format gained an optional third column, a per-benchmark
+tolerance, defaulting to the file-level figure. Each is set at roughly **3× its
+observed spread, floored at 10%**. `n = 3` is thin, so these start loose enough
+not to cry wolf; tightening them as samples accumulate is free and expected.
+Loosening one still requires `[NEEDS-AYUSH-APPROVAL]`.
+
+Incidentally confirming the original decision not to calibrate locally: the same
+benchmarks run **30–38% faster on the WSL2 dev machine** than on the shared
+runner. Checked-in laptop numbers would have made every CI run a regression.
+
 ## Consequences
 
 - The badge cannot say "no performance regressions" until numbers are

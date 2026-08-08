@@ -26,10 +26,18 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-/// A baseline entry: a benchmark name and its recorded nanoseconds, if any.
+/// A baseline entry: a benchmark name, its recorded nanoseconds if any, and an
+/// optional per-benchmark tolerance.
+///
+/// Tolerance is per-benchmark because noise is. Measured over three CI runs on
+/// `ubuntu-latest`, a 1.3 ms parse varied by 2.9% run to run while a 3.5 µs one
+/// varied by 7.6% — the same absolute jitter, a very different fraction. One
+/// global figure would either flake on the small benchmarks or be blind on the
+/// large ones.
 struct Baseline {
     name: String,
     nanos: Option<f64>,
+    tolerance_pct: Option<f64>,
 }
 
 /// Parsed baseline file.
@@ -69,12 +77,13 @@ pub(crate) fn compare(criterion_dir: &Path, baseline_path: &Path) -> Result<Stri
                 );
             }
             Some(expected) => {
+                let tolerance = entry.tolerance_pct.unwrap_or(baseline.tolerance_pct);
                 let delta_pct = (measured_nanos - expected) / expected * 100.0;
-                let verdict = if delta_pct > baseline.tolerance_pct {
+                let verdict = if delta_pct > tolerance {
                     problems.push(format!(
                         "benchmark `{}` regressed {delta_pct:+.1}% ({expected:.1} ns -> \
-                         {measured_nanos:.1} ns), tolerance ±{:.1}%",
-                        entry.name, baseline.tolerance_pct
+                         {measured_nanos:.1} ns), tolerance ±{tolerance:.1}%",
+                        entry.name
                     ));
                     "REGRESSION"
                 } else {
@@ -82,7 +91,7 @@ pub(crate) fn compare(criterion_dir: &Path, baseline_path: &Path) -> Result<Stri
                 };
                 let _ = writeln!(
                     summary,
-                    "  {:<32} {:>12.1} ns   {delta_pct:+.1}%  {verdict}",
+                    "  {:<32} {:>12.1} ns   {delta_pct:+.1}%  (±{tolerance:.0}%)  {verdict}",
                     entry.name, measured_nanos
                 );
             }
@@ -133,9 +142,18 @@ fn parse_baseline(path: &Path) -> Result<BaselineFile, String> {
         let mut parts = line.split_whitespace();
         let (Some(name), Some(value)) = (parts.next(), parts.next()) else {
             return Err(format!(
-                "{}:{line_no}: expected `<name> <ns|uncalibrated>`",
+                "{}:{line_no}: expected `<name> <ns|uncalibrated> [tolerance_pct]`",
                 path.display()
             ));
+        };
+        let tolerance_pct = match parts.next() {
+            None => None,
+            Some(raw) => Some(raw.parse::<f64>().map_err(|_| {
+                format!(
+                    "{}:{line_no}: tolerance `{raw}` is not a number",
+                    path.display()
+                )
+            })?),
         };
         let nanos = if value == "uncalibrated" {
             None
@@ -150,6 +168,7 @@ fn parse_baseline(path: &Path) -> Result<BaselineFile, String> {
         entries.push(Baseline {
             name: name.to_string(),
             nanos,
+            tolerance_pct,
         });
     }
 
@@ -256,6 +275,31 @@ mod tests {
         assert_eq!(mean_point_estimate("{}"), None);
         assert_eq!(mean_point_estimate(r#"{"mean": {}}"#), None);
         assert_eq!(mean_point_estimate(""), None);
+    }
+
+    #[test]
+    fn a_per_benchmark_tolerance_overrides_the_file_default() {
+        let path = std::env::temp_dir().join("xtask-bench-tolerance.tsv");
+        std::fs::write(&path, "#! tolerance_pct = 10\nslow 100.0\nnoisy 100.0 50\n")
+            .expect("write fixture");
+        let parsed = super::parse_baseline(&path).expect("parses");
+        assert!((parsed.tolerance_pct - 10.0).abs() < f64::EPSILON);
+        let noisy = parsed
+            .entries
+            .iter()
+            .find(|e| e.name == "noisy")
+            .expect("entry");
+        assert!(
+            noisy
+                .tolerance_pct
+                .is_some_and(|t| (t - 50.0).abs() < f64::EPSILON)
+        );
+        let slow = parsed
+            .entries
+            .iter()
+            .find(|e| e.name == "slow")
+            .expect("entry");
+        assert_eq!(slow.tolerance_pct, None, "falls back to the file default");
     }
 
     #[test]
