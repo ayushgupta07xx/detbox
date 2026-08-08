@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read   # the ledger below reads this workflow's own run history
 
 env:
   CARGO_TERM_COLOR: always
@@ -59,3 +60,32 @@ jobs:
           name: fuzz-crash-${{ matrix.target }}
           path: fuzz/artifacts/${{ matrix.target }}/
           if-no-files-found: ignore
+
+  # --- konflux P1's other half -----------------------------------------------
+  # §8 lists the nightly fuzz row as "Report -> new goldens", not blocking, so
+  # this reports. P1 itself is a launch gate, and failing every night for the
+  # months it takes to accumulate 72 hours would be noise that teaches everyone
+  # to ignore this workflow.
+  ledger:
+    name: fuzz-hours (P1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: long
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        # Full history: the ledger asks git whether each run's commit descends
+        # from the last change to the fuzzed code, and a shallow clone cannot
+        # answer that.
+        with: { fetch-depth: 0 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Fetch this workflow's run history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --workflow=fuzz-nightly.yml --limit 200 \
+            --json databaseId,headSha,conclusion > runs.json
+      - name: Fuzz-hours on the CURRENT parser
+        continue-on-error: true
+        run: cargo run --release -p xtask -- fuzz-hours runs.json

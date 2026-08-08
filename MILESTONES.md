@@ -284,8 +284,19 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - `corpus-k1` now reports MET or NOT MET against the ≥1,000 threshold
         instead of always warning. Under-claiming a proof is as misleading as
         over-claiming one.
-- [ ] **P1 fuzzing half:** ≥72 cumulative hours with zero violations. The nightly
-      job accumulates it; there is no counter yet.
+- [~] **P1 fuzzing half:** ≥72 cumulative hours with zero violations.
+      `cargo xtask fuzz-hours` now measures it, and reports **0.00 of 72 hours**.
+      - The number comes from GitHub's workflow-run history, not a committed
+        ledger: a file we maintain about ourselves would be editable in the same
+        commit that needed it to be larger.
+      - **Only runs descending from the last change to the fuzzed code count.**
+        Fuzzing proves the code that was fuzzed, so a parser change resets this.
+        There are 2.00 cumulative hours on record and 0.00 that describe today's
+        parser — reporting the former as P1 would be true arithmetic making a
+        false claim.
+      - Reported, not gated: §8 lists the nightly fuzz row as
+        "Report → new goldens", and failing every night for the months this takes
+        would teach everyone to ignore the workflow.
 - [~] **GATE before M3:** yaml-test-suite reject-rate raised **1.1% → 18.1%**
       on 2026-08-09, with accept held at 100% and corpus K1 at 1,000/1,000.
       Four rule families, each unambiguous from the token stream: block scalar
