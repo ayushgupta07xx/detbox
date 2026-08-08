@@ -13,9 +13,12 @@
 //! cargo xtask corpus-survey            which YAML constructs the corpus contains
 //! cargo xtask corpus-k1                K1 over every corpus file (konflux P1)
 //! cargo xtask parse-digest             K3 digest of parse+serialize per golden case
+//! cargo xtask alloc-profile            deterministic allocation counts (the perf gate)
+//! cargo xtask alloc-check <baseline>   compare that profile for equality
 //! cargo xtask bench-compare <dir> <baseline>   criterion output vs saved baseline
 //! ```
 
+mod alloc_profile;
 mod bench;
 mod corpus;
 mod k1;
@@ -26,6 +29,10 @@ mod survey;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+
+/// Counts allocations, but only while `alloc-profile` asks it to.
+#[global_allocator]
+static ALLOC: alloc_profile::Counting = alloc_profile::Counting;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -43,6 +50,8 @@ fn main() -> ExitCode {
         "corpus-survey" => cmd_corpus_survey(),
         "corpus-k1" => k1::run(&workspace_root()),
         "parse-digest" => parse_digest::run(&workspace_root()),
+        "alloc-profile" => alloc_profile::run(&workspace_root()),
+        "alloc-check" => cmd_alloc_check(rest),
         "bench-compare" => cmd_bench_compare(rest),
         "-h" | "--help" | "help" => {
             usage();
@@ -75,6 +84,8 @@ fn usage() {
          \x20 corpus-survey                       which YAML constructs the corpus contains\n\
          \x20 corpus-k1                           K1 over every corpus file (konflux P1)\n\
          \x20 parse-digest                        K3 digest of parse+serialize per golden case\n\
+         \x20 alloc-profile                       deterministic allocation counts (the perf gate)\n\
+         \x20 alloc-check <baseline>              compare that profile for equality\n\
          \x20 bench-compare <dir> <baseline>      criterion output vs saved baseline"
     );
 }
@@ -146,6 +157,14 @@ fn cmd_corpus_verify() -> Result<String, String> {
 
 fn cmd_corpus_survey() -> Result<String, String> {
     survey::run(&workspace_root())
+}
+
+fn cmd_alloc_check(args: &[String]) -> Result<String, String> {
+    let Some(baseline) = args.first() else {
+        return Err("alloc-check: expected <baseline-file>".into());
+    };
+    let profile = alloc_profile::run(&workspace_root())?;
+    alloc_profile::compare(&profile, Path::new(baseline))
 }
 
 fn cmd_bench_compare(args: &[String]) -> Result<String, String> {

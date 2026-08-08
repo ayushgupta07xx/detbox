@@ -46,7 +46,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: criterion
         run: cargo bench -p benchsuite -- --warm-up-time 1 --measurement-time 3
-      - name: compare against saved baseline
+      # The numeric gate. Exact equality — allocation counts have no noise to
+      # tolerate, and this is what actually decides red (ADR-006 amendment 2).
+      - name: allocation profile (deterministic, the perf gate)
+        run: cargo run --release -p xtask -- alloc-check benches/baselines/allocations.tsv
+      # Timings still gate STRUCTURALLY: the run happened, its output parses, no
+      # benchmark vanished, none landed unrecorded. The numbers are published
+      # (§12) but do not decide red — measured over six runs, the same benchmark
+      # moved +38%/-20% between runs.
+      - name: benchmark set intact (structural, not numeric)
         run: cargo run --release -p xtask -- bench-compare target/criterion benches/baselines/linux-x86_64.tsv
       - name: upload raw criterion data
         if: always()
