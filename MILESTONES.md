@@ -5,26 +5,33 @@
 **Updated 2026-08-09.** This section is the session handoff: a new session should
 need this file, `ENGINEERING.md` and the ADRs, and nothing else.
 
-**Done.** Phase 0 accepted. konflux **M1 complete**: `core-cst` (green/red tree,
-ADR-001), `core-formats` with YAML and JSON parsers, and every M1 oracle green.
+**Done.** Phase 0 accepted. konflux **M1 is finished** — every checklist item
+below is ticked except the two that only M2 and the calendar can close. `core-cst`
+(green/red tree, ADR-001), `core-formats` with YAML and JSON parsers, every M1
+oracle green, and the conformance rates now published rather than printed.
 
 | Proof | State |
 |---|---|
 | K1 golden | 37 YAML + 18 JSON, all passing |
 | K1 corpus (**P1** half 1) | **1,000/1,000 files**, 14.9 MB, zero violations — MET |
 | K1 fuzzing (**P1** half 2) | **0.00 of 72 hours** on the current parser — NOT MET |
-| Conformance JSON | accept 100%, reject 100% |
-| Conformance YAML | accept 100%, reject 18.1% |
+| Conformance JSON | accept 100%, reject 100% — published |
+| Conformance YAML | accept 100%, reject 18.1% — published, 77 failures listed in full |
 | K3 determinism | double-build + double-run, 3 platforms |
 | Performance | allocation counts, exact equality (ADR-006 amendment 2) |
 
-**Blocked on Ayush — nothing else can start.**
+Published rates and the complete failure list live in
+[`conformance/REPORT.md`](conformance/REPORT.md), regenerated and byte-compared
+by `gate/conformance` (ADR-009). **P4 is still not complete**: §4.1 names
+toml-test as its third suite, and `toml` arrives with strukt in Phase 2.
+
+**Blocked on Ayush — and now there is genuinely nothing else to pick up.**
 
 1. **D3, the flagship call (konflux or bigsheet).** Blocks M2 and everything
    after it. §11 makes D3 a read of the validation-post signal, and the two
    drafts in `docs/validation/` are **not posted** as far as this file knows.
-   That is the critical path.
-2. **PR #4** open: the fuzz-hours ledger.
+   That is the critical path, and with M1 closed it is now the *only* path.
+2. **ADR-009** proposed, awaiting sign-off (§9.3).
 
 **Not blocked, but only time will fix it.** P1's fuzzing half accrues ~2 hours
 per night and resets whenever `core-cst`, `core-formats` or the fuzz targets
@@ -32,13 +39,16 @@ change. Roughly five weeks of a stationary parser.
 
 **Standing gate before M3.** The YAML reject-rate is 18.1%. The remaining 77
 must-reject cases need block/flow context tracking, which *is* `semantic_view`
-at M2. Merging a document we failed to recognise as invalid is the "silently
-wrong" failure §0 ranks first, so this must rise before M3 ships a merge.
+at M2 — and the published failure list now shows that directly: read the case
+titles in `REPORT.md` and they are almost all indentation, flow-collection and
+plain-multiline cases. Merging a document we failed to recognise as invalid is
+the "silently wrong" failure §0 ranks first, so this must rise before M3 ships a
+merge.
 
 **Accepted decisions**, so a new session does not re-litigate them: ADR-001
-through ADR-008 all accepted; the ASan/LSan substitution for §8's "ASan/UBSan"
-accepted (Rust has no UBSan; miri covers it); the corpus expansion to 1,250
-files accepted.
+through ADR-008 all accepted (ADR-009 is proposed); the ASan/LSan substitution
+for §8's "ASan/UBSan" accepted (Rust has no UBSan; miri covers it); the corpus
+expansion to 1,250 files accepted.
 
 ---
 
@@ -160,8 +170,10 @@ blocking today against the weakest *true* statement available, and arm here:
 - [x] ADR-002 toolchain + MSRV · ADR-003 gate arming · ADR-004 corpus ·
       ADR-005 determinism · ADR-006 baselines · ADR-007 no brand-named artifacts.
       **Accepted** with Phase 0 on 2026-08-07.
-- [x] **ADR-001** — `core-cst` representation. Spike run, ADR written, `proposed`
-      and awaiting sign-off (§9.3).
+- [x] **ADR-001** — `core-cst` representation. Spike run, ADR written,
+      **accepted 2026-08-08**.
+- [~] **ADR-009** — publishing conformance rates. `proposed`, awaiting sign-off
+      (§9.3).
 
 ### 0.5 Validation + decisions — [AYUSH]
 
@@ -223,11 +235,9 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         not the serializer — dropping a refcounted tree recursed and aborted the
         process with `SIGABRT`. `core-cst` now has an iterative `Drop`. Recorded
         as a consequence in ADR-001 that the original decision missed.
-- [!] **JSON has no corpus.** The fetched corpus is 750 `.yaml` + 250 `.tf` and
-      contains no JSON, so konflux **P1** (K1 on ≥1,000 real files) is currently
-      unmet for half of M1's promise. The 18 JSON cases are grammar-derived.
-      Adding a JSON corpus source changes what the proofs run against and is a
-      reviewed change to evidence (§9.3, ADR-004) — yours to approve.
+- [x] **JSON has no corpus** — **resolved.** Approved 2026-08-08; 250 SchemaStore
+      files were added and K1 holds on 1,000/1,000. See "P1 corpus half: MET"
+      below. Kept because the finding is why the corpus source exists.
 - [x] Oracle first: `yaml_roundtrip` and `json_roundtrip` fuzz targets, corpus-
       seeded from the golden cases (§3.3), both wired into `fuzz-smoke` and
       `fuzz-nightly`. Each asserts **F1** (never panics, on any bytes) and **K1**
@@ -266,7 +276,10 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         structural, and our three awkward cases are encoding-level. The oracles
         are compatible as written, so ADR-008 draws the accept/reject line at
         structure and §3.2's `parse` signature stands unchanged.
-- [ ] `core-cst` representation implemented per ADR-001.
+- [x] `core-cst` representation implemented per ADR-001 — green/red tree,
+      `crates/core-cst/src/lib.rs`, with the iterative `Drop` the spike missed.
+      *(Was left unticked while the parsers that use it were ticked; corrected
+      here, not newly done.)*
 - [x] **JSON parse/serialize.** Lossless, RFC 8259, three separate passes: a
       total lexer covering every byte, an iterative validator, an order-preserving
       builder. `Json::parse` is live; the three JSON oracles are green.
@@ -354,8 +367,9 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - The remaining 77 must-reject cases need block/flow context tracking,
         which arrives with `semantic_view` at M2. This gate stays open until
         the rate is high enough that M3 can merge safely.
-- [ ] Verbatim-node escape hatch for anything the grammar cannot represent
-      (§3.1: preserving beats understanding).
+- [x] Verbatim-node escape hatch for anything the grammar cannot represent
+      (§3.1: preserving beats understanding). *Duplicate of the ticked item
+      above; both refer to the same `SyntaxKind::VERBATIM` work.*
 - [x] **Deleted `core_cst::roundtrip_identity`** and retired the
       `roundtrip_identity` fuzz target, exactly as ADR-003 said would happen —
       its doc comment said leaving it would be "a bug in the milestone, not a
@@ -377,8 +391,34 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - Benchmarks re-pointed at the real parsers, names changed accordingly —
         which `bench-compare`'s name-parity check makes a reviewed change rather
         than a silent one.
-- [ ] Arm `gate/conformance` — publish pass rates **with the honest failure
-      list** (P4).
+- [x] **Armed `gate/conformance` — pass rates published with the honest failure
+      list** (P4). `conformance/REPORT.md`, generated by
+      `cargo xtask conformance-report --write`, regenerated and byte-compared by
+      the gate. → **ADR-009**.
+      - The rates were already measured and ratcheted; they were **published
+        nowhere**. The only rendering was an `--nocapture` line in a CI log that
+        expires, and the list truncated at *"first 15 of 77"* — so 62 of
+        konflux's YAML conformance failures had never been written down at all.
+      - *Why a committed file is safe here and a committed fuzz-hours ledger was
+        not:* fuzz hours are a fact about runs that happened and cannot be
+        recomputed, so a file we maintain about ourselves is worthless as
+        evidence. A conformance rate is a pure function of two pinned commits
+        and our own source, so CI recomputes it every run. Committing a derived
+        value is safe exactly when the derivation is reproducible.
+      - **Proven to have teeth, both directions.** Editing the published YAML
+        reject rate 18.1% → 94.7% fails with the differing line named; deleting
+        one case from the 77-line failure list fails the same way. Neither can
+        be fixed by editing the file.
+      - The list carries each case's own title, so it reads as *"Wrong
+        indentation in Sequence"* rather than as 77 four-character IDs. That
+        also corroborates the M3 gate below: nearly every remaining failure is a
+        block/flow context case, which is what `semantic_view` brings at M2.
+      - *Scope note:* **P4 is not complete and this does not complete it.** §4.1
+        names three suites; toml-test is the third and `toml` does not exist
+        until Phase 2, so P4 finishes with strukt.
+      - Badge *values* are generated; badge *images* are not — colour and form
+        are visual design and Ayush's alone (§16), landing with the launch
+        README (§12).
 - [x] **Calibrated benchmark baselines**, recorded from the bench job on `main`
       at `9ef31af` (ADR-006). The regression gate is now numeric, not just
       structural.
@@ -391,7 +431,8 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - Confirms ADR-006's refusal to calibrate locally: the same benchmarks run
         **30–38% faster on the dev machine** than on the shared runner. Laptop
         numbers would have made every CI run a regression.
-- [ ] **P1 partial:** K1 green on all 1,000 corpus files. *Output required.*
+- [x] **P1 partial:** K1 green on all 1,000 corpus files. *Duplicate of "P1
+      corpus half: MET" above, which carries the output.*
 
 ### M2 — Structural diff
 
