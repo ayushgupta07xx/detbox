@@ -285,11 +285,34 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       first. The rate must rise substantially before M3 ships.
 - [ ] Verbatim-node escape hatch for anything the grammar cannot represent
       (§3.1: preserving beats understanding).
-- [ ] Delete `core_cst::roundtrip_identity`; re-point golden, fuzz and
-      determinism gates at the real pair (ADR-003).
+- [x] **Deleted `core_cst::roundtrip_identity`** and retired the
+      `roundtrip_identity` fuzz target, exactly as ADR-003 said would happen —
+      its doc comment said leaving it would be "a bug in the milestone, not a
+      feature".
+      - Its six golden cases were **preserved, not deleted**: they are now
+        `300`–`305` in the YAML round-trip suite, checked against the real
+        `parse`/`serialize` pair. All six still round-trip, which is what ADR-003
+        predicted when it said an input that round-trips under the empty grammar
+        must still round-trip under a real one.
+      - `crates/core-verify/tests/golden/roundtrip-identity/` remains as the
+        golden **runner's** own fixture, which is all it ever tested.
+      - Determinism re-pointed: `xtask parse-digest` emits the accept/reject
+        verdict and the SHA-256 of the serialised tree for all 55 golden cases,
+        double-built and double-run on Linux, Windows and macOS. K1 asks whether
+        the bytes came back; **K3 asks whether they come back the same way every
+        time**. The diagnostic text is hashed too — a parser whose *message*
+        varies between runs is as nondeterministic as one whose bytes do, and
+        those messages reach `--json`.
+      - Benchmarks re-pointed at the real parsers, names changed accordingly —
+        which `bench-compare`'s name-parity check makes a reviewed change rather
+        than a silent one.
 - [ ] Arm `gate/conformance` — publish pass rates **with the honest failure
       list** (P4).
-- [ ] Record calibrated benchmark baselines from a run on `main` (ADR-006).
+- [~] Record calibrated benchmark baselines from a run on `main` (ADR-006).
+      Names are recorded and the structural checks are blocking; the numbers stay
+      `uncalibrated` until taken from a CI run, since laptop timings are not
+      comparable to a shared runner and publishing them as if they were would be
+      a cherry-picked benchmark (Appendix C).
 - [ ] **P1 partial:** K1 green on all 1,000 corpus files. *Output required.*
 
 ### M2 — Structural diff

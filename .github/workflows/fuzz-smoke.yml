@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         # One target per format per operation (§2).
-        target: [roundtrip_identity, yaml_roundtrip, json_roundtrip]
+        target: [yaml_roundtrip, json_roundtrip]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

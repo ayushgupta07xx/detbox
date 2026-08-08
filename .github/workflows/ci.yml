@@ -216,6 +216,15 @@ jobs:
           ./target/det-a/release/xtask scaffold-report > "$RUNNER_TEMP/run-a.json"
           ./target/det-b/release/xtask scaffold-report > "$RUNNER_TEMP/run-b.json"
           ./target/det-a/release/xtask assert-equal "$RUNNER_TEMP/run-a.json" "$RUNNER_TEMP/run-b.json"
+      - name: Double run the real parser (K3, ADR-003)
+        run: |
+          set -euo pipefail
+          # The scaffold report above is the repo's canary. This is the parser's:
+          # K1 asks whether the bytes came back, K3 whether they come back the
+          # same way every time.
+          ./target/det-a/release/xtask parse-digest > "$RUNNER_TEMP/parse-a.tsv"
+          ./target/det-b/release/xtask parse-digest > "$RUNNER_TEMP/parse-b.tsv"
+          ./target/det-a/release/xtask assert-equal "$RUNNER_TEMP/parse-a.tsv" "$RUNNER_TEMP/parse-b.tsv"
       - name: Corpus manifests are pinned, capped and licence-clean (offline)
         run: cargo run --release -p xtask -- corpus-verify
 
@@ -276,6 +285,10 @@ jobs:
           cargo run --release -p xtask -- scaffold-report > "$RUNNER_TEMP/run-a.json"
           cargo run --release -p xtask -- scaffold-report > "$RUNNER_TEMP/run-b.json"
           cargo run --release -p xtask -- assert-equal "$RUNNER_TEMP/run-a.json" "$RUNNER_TEMP/run-b.json"
+          # K3 is a cross-platform claim, so the parser digest runs here too.
+          cargo run --release -p xtask -- parse-digest > "$RUNNER_TEMP/parse-a.tsv"
+          cargo run --release -p xtask -- parse-digest > "$RUNNER_TEMP/parse-b.tsv"
+          cargo run --release -p xtask -- assert-equal "$RUNNER_TEMP/parse-a.tsv" "$RUNNER_TEMP/parse-b.tsv"
 
   # --- Shell scripts are code too ------------------------------------------
   shellcheck:

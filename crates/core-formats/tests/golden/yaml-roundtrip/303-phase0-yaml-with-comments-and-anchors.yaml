@@ -1,0 +1,9 @@
+# leading comment, must survive byte-identically
+defaults: &defaults   # trailing comment after an anchor
+  replicas: 3
+  image:   "nginx:1.25"     # note the irregular spacing
+
+prod:
+  <<: *defaults
+  replicas: 5
+...

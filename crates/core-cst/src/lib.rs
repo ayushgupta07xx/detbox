@@ -46,10 +46,15 @@
 //!
 //! ## Status
 //!
-//! **konflux M1, oracle stage.** The types below are the contract the K1 oracle
-//! tests. There is no parser yet: [`core-formats`] returns a `ParseReport`
-//! saying so, and the round-trip suites are red until it exists. That is the
-//! point — a test never observed failing is not known to test anything.
+//! **konflux M1, implemented.** [`core-formats`] parses YAML and JSON onto these
+//! types, and K1 holds on 750 corpus files, 49 golden cases and both official
+//! conformance suites.
+//!
+//! The Phase-0 `roundtrip_identity` scaffold that made the K1 gates non-vacuous
+//! before a parser existed is **gone**, as ADR-003 said it would be. Its six
+//! golden cases were not: they live on as `300`–`305` in the YAML round-trip
+//! suite, now checked against the real `parse`/`serialize` pair. An input that
+//! round-tripped under the empty grammar still round-trips under a real one.
 //!
 //! [`core-formats`]: https://github.com/ayushgupta07xx/detbox/tree/main/crates/core-formats
 
@@ -282,22 +287,9 @@ impl Cst {
     }
 }
 
-/// The K1 identity on the empty grammar.
-///
-/// # Phase 0 leftover
-///
-/// ADR-003 introduced this so the golden, fuzz, determinism and miri gates were
-/// non-vacuous before a parser existed, and says it is deleted once the real
-/// `parse`/`serialize` pair ships. That has not happened yet: `parse` is still
-/// a stub, so the Phase 0 gates still point here. It goes when parse lands.
-#[must_use]
-pub fn roundtrip_identity(input: &[u8]) -> Vec<u8> {
-    input.to_vec()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Cst, GreenChild, GreenNode, GreenToken, Span, SyntaxKind, roundtrip_identity};
+    use super::{Cst, GreenChild, GreenNode, GreenToken, Span, SyntaxKind};
     use std::rc::Rc;
 
     const ROOT: SyntaxKind = SyntaxKind(0);
@@ -305,19 +297,6 @@ mod tests {
 
     fn token(text: &[u8]) -> GreenChild {
         GreenChild::Token(Rc::new(GreenToken::new(WORD, text)))
-    }
-
-    #[test]
-    fn k1_holds_on_the_empty_grammar() {
-        for case in [
-            &b""[..],
-            b"a",
-            b"key: value  # comment\n",
-            b"\r\n\r\n",
-            b"\xff\xfe\x00invalid utf-8",
-        ] {
-            assert_eq!(roundtrip_identity(case), case, "K1 violated for {case:?}");
-        }
     }
 
     #[test]

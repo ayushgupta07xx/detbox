@@ -54,7 +54,7 @@ fn yaml_k1_round_trip() {
     // 12 covering constructs the YAML spec allows but our corpus happens not to
     // contain, and 2 minimised from K1 violations the corpus itself produced.
     // K1 is a claim about YAML, not about our corpus.
-    run(&Yaml, "yaml-roundtrip", 31);
+    run(&Yaml, "yaml-roundtrip", 37);
 }
 
 #[test]
