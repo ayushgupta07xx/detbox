@@ -351,6 +351,22 @@ mod tests {
         assert_eq!(cst.serialize(), raw);
     }
 
+    /// Depth for the stack-safety tests.
+    ///
+    /// Reduced under miri, which interprets every operation and needs roughly
+    /// three orders of magnitude longer per allocation — 100,000 nodes there is
+    /// a job that runs for hours, not a test.
+    ///
+    /// This scopes a tool to what it can check; it does not weaken the proof.
+    /// The property at stake is native stack depth, which miri's interpreter
+    /// does not model in the first place, and the full depth still runs in
+    /// `gate/tests`, `gate/msrv` and `gate/platform` on Linux, Windows and
+    /// macOS. What miri is here for — the `Rc` handling and the iterative drop
+    /// being free of undefined behaviour — is exercised identically at 1,000.
+    fn depth(full: usize) -> usize {
+        if cfg!(miri) { 1_000 } else { full }
+    }
+
     fn nested(depth: usize) -> Rc<GreenNode> {
         let mut node = Rc::new(GreenNode::new(ROOT, vec![token(b"x")]));
         for _ in 0..depth {
@@ -363,7 +379,7 @@ mod tests {
     fn serialize_does_not_overflow_the_stack_on_deep_nesting() {
         // The corpus nests 8+ levels; a recursive serializer would be a panic
         // waiting for a pathological file. 10_000 levels proves it is iterative.
-        assert_eq!(Cst::new(nested(10_000)).serialize(), b"x");
+        assert_eq!(Cst::new(nested(depth(10_000))).serialize(), b"x");
     }
 
     #[test]
@@ -372,7 +388,7 @@ mod tests {
         // iterative, but the *destructor* recursed and aborted the process with
         // SIGABRT. See the `Drop` impl. 100_000 levels, well past anything the
         // serializer test covers, because a crash on cleanup is not catchable.
-        drop(nested(100_000));
+        drop(nested(depth(100_000)));
     }
 
     #[test]
@@ -380,7 +396,7 @@ mod tests {
         // The iterative drop must not confuse "I am the last owner" with "this
         // is garbage". Structural sharing between versions is the entire reason
         // ADR-001 chose this representation.
-        let shared = nested(1_000);
+        let shared = nested(depth(1_000));
         let a = Cst::new(Rc::new(GreenNode::new(
             ROOT,
             vec![GreenChild::Node(Rc::clone(&shared))],
