@@ -18,5 +18,18 @@ core-cst = { path = "../core-cst", version = "0.0.0" }
 # things about core-formats, so the arrow points that way and never back.
 core-verify = { path = "../core-verify", version = "0.0.0" }
 
+[features]
+# Off by default. The conformance suites are FETCHED, not committed
+# (conformance/fetch.sh), so this test can only build where they exist. Gating it
+# behind a feature is not a skip — `required-features` means the test is not
+# compiled at all unless asked for, and the one CI job that asks also fetches.
+# The alternative was for six jobs that run `cargo test --workspace` to each
+# clone two upstream repositories.
+conformance-suites = []
+
+[[test]]
+name = "conformance"
+required-features = ["conformance-suites"]
+
 [lints]
 workspace = true

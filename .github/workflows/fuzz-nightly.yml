@@ -41,6 +41,10 @@ jobs:
       - name: Long run (3600s)
         run: |
           set -euo pipefail
+          # The working corpus is gitignored scratch (libFuzzer writes into it),
+          # so it does not exist on a fresh checkout. The curated seeds beside it
+          # are committed evidence.
+          mkdir -p fuzz/corpus/${{ matrix.target }}
           # --target is explicit: the installed cargo-fuzz defaults to its own
           # musl host triple, and a sanitizer cannot be linked against a static
           # libc ("sanitizer is incompatible with statically linked libc").
