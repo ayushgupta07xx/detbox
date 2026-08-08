@@ -1,19 +1,32 @@
 #! tolerance_pct = 10
 # Runner class: ubuntu-latest, GitHub-hosted, x86_64.
 #
-# Names changed at konflux M1: the Phase-0 `k1_identity_*` benchmarks measured
-# `roundtrip_identity`, which ADR-003 deleted once real parsers existed. These
-# measure the real parse/serialize pair.
+#   <benchmark>  <nanoseconds|uncalibrated>  [tolerance_pct]
 #
-# Still `uncalibrated`. Numbers taken on a WSL2 laptop are not comparable to a
-# shared GitHub-hosted runner, and publishing them as if they were would be a
-# cherry-picked benchmark (Appendix C). Calibrated values are recorded from a CI
-# run on `main`, as a reviewed change. See ADR-006.
+# CALIBRATED 2026-08-08 from the bench job on `main` at 9ef31af, as ADR-006
+# requires. Before this, every entry read `uncalibrated`, which was the honest
+# state: laptop timings are not comparable to a shared runner.
 #
-# What IS blocking today: the run happened, its output parses, every name here
-# still exists, and every benchmark that ran is named here.
-yaml_parse_small	uncalibrated
-yaml_parse_real	uncalibrated
-yaml_parse_64kib	uncalibrated
-json_parse_real	uncalibrated
-json_parse_64kib	uncalibrated
+# Tolerances are per-benchmark because noise is. Measured across three CI runs
+# on this runner class:
+#
+#   benchmark          main run (ns)   run-to-run spread
+#   json_parse_real          11355.2               1.3%
+#   yaml_parse_64kib       1352928.0               2.9%
+#   json_parse_64kib         61243.4               4.2%
+#   yaml_parse_real           8742.2               4.6%
+#   yaml_parse_small          3323.2               7.6%
+#
+# The same absolute jitter is a very different fraction of a 3.5 us benchmark
+# than of a 1.3 ms one. A single global figure would flake on the small ones or
+# be blind on the large ones.
+#
+# Each tolerance is ~3x its observed spread, floored at 10%. n=3 is thin, so
+# these start loose enough not to cry wolf. Tightening them as samples
+# accumulate is free and expected; loosening one requires
+# [NEEDS-AYUSH-APPROVAL] (§8), and golden-guard covers this path.
+json_parse_64kib	61243.4	15
+json_parse_real	11355.2	10
+yaml_parse_64kib	1352928.0	10
+yaml_parse_real	8742.2	15
+yaml_parse_small	3323.2	25
