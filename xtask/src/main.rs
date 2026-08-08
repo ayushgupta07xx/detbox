@@ -15,12 +15,14 @@
 //! cargo xtask parse-digest             K3 digest of parse+serialize per golden case
 //! cargo xtask alloc-profile            deterministic allocation counts (the perf gate)
 //! cargo xtask alloc-check <baseline>   compare that profile for equality
+//! cargo xtask fuzz-hours <runs.json>   cumulative fuzz-hours on the CURRENT parser (P1)
 //! cargo xtask bench-compare <dir> <baseline>   criterion output vs saved baseline
 //! ```
 
 mod alloc_profile;
 mod bench;
 mod corpus;
+mod fuzz_hours;
 mod k1;
 mod parse_digest;
 mod report;
@@ -52,6 +54,7 @@ fn main() -> ExitCode {
         "parse-digest" => parse_digest::run(&workspace_root()),
         "alloc-profile" => alloc_profile::run(&workspace_root()),
         "alloc-check" => cmd_alloc_check(rest),
+        "fuzz-hours" => cmd_fuzz_hours(rest),
         "bench-compare" => cmd_bench_compare(rest),
         "-h" | "--help" | "help" => {
             usage();
@@ -86,6 +89,7 @@ fn usage() {
          \x20 parse-digest                        K3 digest of parse+serialize per golden case\n\
          \x20 alloc-profile                       deterministic allocation counts (the perf gate)\n\
          \x20 alloc-check <baseline>              compare that profile for equality\n\
+         \x20 fuzz-hours <runs.json>              fuzz-hours on the CURRENT parser (P1)\n\
          \x20 bench-compare <dir> <baseline>      criterion output vs saved baseline"
     );
 }
@@ -165,6 +169,15 @@ fn cmd_alloc_check(args: &[String]) -> Result<String, String> {
     };
     let profile = alloc_profile::run(&workspace_root())?;
     alloc_profile::compare(&profile, Path::new(baseline))
+}
+
+fn cmd_fuzz_hours(args: &[String]) -> Result<String, String> {
+    let Some(path) = args.first() else {
+        return Err("fuzz-hours: expected <runs.json> (from `gh run list --json`)".into());
+    };
+    let json = std::fs::read_to_string(path)
+        .map_err(|e| format!("fuzz-hours: cannot read {path}: {e}"))?;
+    fuzz_hours::run(&workspace_root(), &json)
 }
 
 fn cmd_bench_compare(args: &[String]) -> Result<String, String> {
