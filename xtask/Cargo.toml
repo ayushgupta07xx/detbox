@@ -15,6 +15,11 @@ publish = false
 # proves determinism and verifies the corpus; it should not itself be a supply
 # chain. SHA-256 is implemented in-crate against FIPS 180-4 vectors (ADR-005).
 [dependencies]
+# First-party only. The "zero dependencies" rule above is about third-party
+# supply chain; `corpus-k1` has to call the real parser to prove K1 on the real
+# corpus, and calling it through the same `Format` trait every product uses is
+# the point.
+core-formats = { path = "../crates/core-formats", version = "0.0.0" }
 
 [lints]
 workspace = true

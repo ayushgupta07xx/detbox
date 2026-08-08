@@ -38,6 +38,7 @@ jobs:
   fmt:
     name: gate/format
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -47,6 +48,7 @@ jobs:
   clippy:
     name: gate/lints (clippy pedantic)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -60,16 +62,21 @@ jobs:
   test:
     name: gate/tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --all-features
+      # Deliberately not --all-features: that would enable
+      # `conformance-suites`, whose test requires two fetched upstream
+      # repositories. It runs blocking in its own job, which fetches them.
+      - run: cargo test --workspace
 
   # --- Gate: Golden-file suites --------------------------------------------
   golden:
     name: gate/golden
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -84,6 +91,7 @@ jobs:
   golden-guard:
     name: gate/golden-guard
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +107,8 @@ jobs:
             '**/tests/golden/**' \
             'benches/baselines/**' \
             'corpora/sources/**' \
-            'fuzz/corpus/**' || true)
+            'conformance/thresholds.tsv' \
+            'fuzz/seeds/**' || true)
           if [ -z "$touched" ]; then
             echo "No evidence files touched."
             exit 0
@@ -112,31 +121,35 @@ jobs:
             exit 0
           fi
           echo
-          echo "::error::Golden files, baselines, corpus manifests and fuzz seeds are"
+          echo "::error::Golden files, baselines, corpus manifests, conformance"
+          echo "::error::thresholds and fuzz seeds are"
           echo "::error::EVIDENCE (MASTER_PLAN §8). They may never be edited to make CI"
           echo "::error::pass. If the change is genuinely correct, put it in the PR body"
           echo "::error::under a [NEEDS-AYUSH-APPROVAL] header with justification."
           exit 1
 
   # --- Gate: Conformance suites --------------------------------------------
-  # ARMS AT konflux M1. There is no parser yet, so there is nothing to conform.
-  # What is blocking today: the adapter harness exists, runs, and reports.
-  # M1 adds yaml-test-suite / JSONTestSuite at pinned revs and publishes the
-  # pass rates as badges, including the honest failure lists (§4.1 P4).
+  # JSONTestSuite and yaml-test-suite at pinned commits, 720 cases. Accept-rate
+  # and reject-rate are ratcheted separately and never blended — see ADR-008 and
+  # conformance/README.md for why a single figure would publish 66.4% for a
+  # parser that does nothing.
+  #
+  # RED until a parser exists: every threshold is `unrecorded`, which this gate
+  # treats as an error rather than a free pass.
   conformance:
     name: gate/conformance
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Conformance harness smoke
+      - name: Fetch suites at their pinned commits
+        run: conformance/fetch.sh
+      - name: Run the adapters, with the honest failure lists
         run: |
-          set -euo pipefail
-          echo "Phase 0: no format implementations exist, so no conformance claim is made."
-          echo "Blocking today: the harness crate builds and its runner is reachable."
-          cargo test -p core-verify --all-features
-          echo "ARMS AT konflux M1 — see MILESTONES.md."
+          cargo test -p core-formats --features conformance-suites \
+            --test conformance -- --nocapture
 
   # --- Gate: Differential suites -------------------------------------------
   # ARMS AT konflux M2. Today this proves the external oracles CI depends on are
@@ -144,6 +157,7 @@ jobs:
   differential:
     name: gate/differential
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: External oracles are present and behave
@@ -186,6 +200,7 @@ jobs:
   determinism:
     name: gate/determinism
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -206,6 +221,15 @@ jobs:
           ./target/det-a/release/xtask scaffold-report > "$RUNNER_TEMP/run-a.json"
           ./target/det-b/release/xtask scaffold-report > "$RUNNER_TEMP/run-b.json"
           ./target/det-a/release/xtask assert-equal "$RUNNER_TEMP/run-a.json" "$RUNNER_TEMP/run-b.json"
+      - name: Double run the real parser (K3, ADR-003)
+        run: |
+          set -euo pipefail
+          # The scaffold report above is the repo's canary. This is the parser's:
+          # K1 asks whether the bytes came back, K3 whether they come back the
+          # same way every time.
+          ./target/det-a/release/xtask parse-digest > "$RUNNER_TEMP/parse-a.tsv"
+          ./target/det-b/release/xtask parse-digest > "$RUNNER_TEMP/parse-b.tsv"
+          ./target/det-a/release/xtask assert-equal "$RUNNER_TEMP/parse-a.tsv" "$RUNNER_TEMP/parse-b.tsv"
       - name: Corpus manifests are pinned, capped and licence-clean (offline)
         run: cargo run --release -p xtask -- corpus-verify
 
@@ -213,6 +237,7 @@ jobs:
   docs:
     name: gate/docs
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
@@ -224,6 +249,7 @@ jobs:
   msrv:
     name: gate/msrv (1.90)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       # Overrides rust-toolchain.toml, which pins the day-to-day compiler.
       RUSTUP_TOOLCHAIN: "1.90.0"
@@ -235,7 +261,10 @@ jobs:
       # Lints are checked on stable, not on the MSRV toolchain: an older clippy
       # emits different diagnostics, and chasing that is not a proof of anything.
       - run: cargo build --workspace --all-features
-      - run: cargo test --workspace --all-features
+      # Deliberately not --all-features: that would enable
+      # `conformance-suites`, whose test requires two fetched upstream
+      # repositories. It runs blocking in its own job, which fetches them.
+      - run: cargo test --workspace
 
   # --- Platform matrix (MASTER_PLAN §2) ------------------------------------
   # "Linux x86_64 is the source of truth. Windows and macOS are release targets
@@ -243,6 +272,7 @@ jobs:
   cross-platform:
     name: gate/platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -251,7 +281,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --all-features
+      # Deliberately not --all-features: that would enable
+      # `conformance-suites`, whose test requires two fetched upstream
+      # repositories. It runs blocking in its own job, which fetches them.
+      - run: cargo test --workspace
       # K3 is a cross-platform claim, so the determinism gate must run on every
       # platform we ship to — not just on the runner that happens to be cheapest.
       - name: Determinism (double-run)
@@ -263,15 +296,20 @@ jobs:
           cargo run --release -p xtask -- scaffold-report > "$RUNNER_TEMP/run-a.json"
           cargo run --release -p xtask -- scaffold-report > "$RUNNER_TEMP/run-b.json"
           cargo run --release -p xtask -- assert-equal "$RUNNER_TEMP/run-a.json" "$RUNNER_TEMP/run-b.json"
+          # K3 is a cross-platform claim, so the parser digest runs here too.
+          cargo run --release -p xtask -- parse-digest > "$RUNNER_TEMP/parse-a.tsv"
+          cargo run --release -p xtask -- parse-digest > "$RUNNER_TEMP/parse-b.tsv"
+          cargo run --release -p xtask -- assert-equal "$RUNNER_TEMP/parse-a.tsv" "$RUNNER_TEMP/parse-b.tsv"
 
   # --- Shell scripts are code too ------------------------------------------
   shellcheck:
     name: gate/shellcheck
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck corpora/fetch.sh
         run: |
           set -euo pipefail
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck --severity=warning corpora/*.sh
+          shellcheck --severity=warning corpora/*.sh conformance/*.sh

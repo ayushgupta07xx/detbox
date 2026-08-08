@@ -27,12 +27,12 @@ jobs:
   smoke:
     name: fuzz/${{ matrix.target }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        # One entry per format per operation (§2). M1 adds yaml_roundtrip and
-        # json_roundtrip here in the same PR as the parser.
-        target: [roundtrip_identity]
+        # One target per format per operation (§2).
+        target: [yaml_roundtrip, json_roundtrip]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -43,12 +43,16 @@ jobs:
       - name: Smoke ${{ matrix.target }} (300s, corpus-seeded)
         run: |
           set -euo pipefail
+          # The working corpus is gitignored scratch (libFuzzer writes into it),
+          # so it does not exist on a fresh checkout. The curated seeds beside it
+          # are committed evidence.
+          mkdir -p fuzz/corpus/${{ matrix.target }}
           # --target is explicit: the installed cargo-fuzz defaults to its own
           # musl host triple, and a sanitizer cannot be linked against a static
           # libc ("sanitizer is incompatible with statically linked libc").
           cargo +nightly fuzz run --target x86_64-unknown-linux-gnu \
             ${{ matrix.target }} \
-            fuzz/corpus/${{ matrix.target }} \
+            fuzz/corpus/${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
             -- -max_total_time=300 -print_final_stats=1
       - name: Upload crash artifacts
         if: failure()

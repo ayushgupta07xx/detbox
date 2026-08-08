@@ -78,6 +78,12 @@ bigsheet, konflux slides to Phase 4 (the kernel still gets built, via strukt).
       job, which is strictly better at it for Rust. Nothing is skipped and no
       threshold is loosened, but §8 is law and the substitution is yours to
       accept or replace.
+- [x] **No workflow job had `timeout-minutes`.** A single slow test could burn
+      free-tier minutes until GitHub's 6-hour default, against §10's budget
+      constraint. Found when `gate/miri` ran 19 minutes on a 100,000-node drop
+      test and had to be cancelled. Every job is now capped, and miri is
+      installed on the dev machine — it had caught two problems in two sessions,
+      both discovered only in CI, which is one more than a local toolchain costs.
 - [ ] `actions/checkout@v4` emits a Node 20 deprecation warning on every job.
       Bumping to v5 is a one-line change; left alone because a green run today
       beats an untested action version.
@@ -156,23 +162,157 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       `spikes/adr-001-cst-representation/`, reproducible in one command.
       *Finding:* the owned token tree is **dominated** — §3.1's stated pair
       contained a clear loser and the strongest challenger was not in it.
-- [ ] Oracle first: golden suites for YAML and JSON round-trip, seeded from the
-      1,000-file corpus. **Confirm red.**
-- [ ] Oracle first: `yaml_roundtrip` and `json_roundtrip` fuzz targets. **Confirm
-      red.**
-- [ ] Oracle first: yaml-test-suite + JSONTestSuite adapters at pinned revs,
-      pass rate recorded as a threshold that may only rise. **Confirm red.**
+- [x] Oracle first: golden suites for YAML and JSON round-trip. **Confirmed red
+      2026-08-08: 47 of 47 cases fail, all with one cause (no parser), zero
+      byte-mismatch failures.**
+      - Contract landed: `core-cst` green/red types per ADR-001 + `Cst::serialize`;
+        `core-formats::Format` with `parse`/`serialize`; `core-verify::roundtrip`.
+      - "Seeded from the corpus" read as *the corpus decides what the cases must
+        cover*, not *copy corpus files in* — copying would vendor third-party
+        bytes ADR-004 exists to avoid. `cargo xtask corpus-survey` measures the
+        constructs; 17 YAML cases are corpus-derived with their shares recorded,
+        12 more cover spec constructs the corpus happens not to contain.
+      - A round-trip case has **no `expected` file** — the input is the
+        expectation, so a K1 case cannot be doctored, only deleted.
+      - *Finding:* **41.2% of corpus YAML contains Helm's `{{ }}`**, which is not
+        YAML at all. §3.1 frames the verbatim escape hatch as a fallback for
+        exotic tags; the corpus says it is the main path for two files in five.
+      - *Defect found and fixed:* the deep-nesting test caught the **destructor**,
+        not the serializer — dropping a refcounted tree recursed and aborted the
+        process with `SIGABRT`. `core-cst` now has an iterative `Drop`. Recorded
+        as a consequence in ADR-001 that the original decision missed.
+- [!] **JSON has no corpus.** The fetched corpus is 750 `.yaml` + 250 `.tf` and
+      contains no JSON, so konflux **P1** (K1 on ≥1,000 real files) is currently
+      unmet for half of M1's promise. The 18 JSON cases are grammar-derived.
+      Adding a JSON corpus source changes what the proofs run against and is a
+      reviewed change to evidence (§9.3, ADR-004) — yours to approve.
+- [x] Oracle first: `yaml_roundtrip` and `json_roundtrip` fuzz targets, corpus-
+      seeded from the golden cases (§3.3), both wired into `fuzz-smoke` and
+      `fuzz-nightly`. Each asserts **F1** (never panics, on any bytes) and **K1**
+      (round-trip when parse succeeds).
+      - **F1 measured:** 43M executions across the three targets, zero crashes.
+        Trivially true today — there is no parser to panic.
+      - *The finding:* a K1 fuzz target **cannot be red** while parse always
+        fails. It never reaches its assertion, so it reports success having
+        verified nothing — and unlike a golden suite there is no case count to
+        notice shrinking. Demonstrated: 200,000 inputs, exit 0, zero K1
+        assertions evaluated.
+      - The red therefore lives in a **non-vacuity guard**
+        (`crates/core-formats/tests/fuzz_seeds.rs`): every seed in a target's
+        corpus must parse, and the seed count must not fall behind the golden
+        suite. **Confirmed red 2026-08-08: 0 of 47 seeds parse.** This is what
+        makes the eventual green mean something.
+- [x] Oracle first: yaml-test-suite + JSONTestSuite adapters at pinned revs.
+      **Confirmed red 2026-08-08.** 720 cases fetched with exact counts asserted:
+      JSONTestSuite 318 (95 accept / 188 reject / 35 implementation-defined),
+      yaml-test-suite 402 (308 / 94). Suites fetched, never vendored (ADR-004
+      discipline); yaml's licence comes from a separately pinned `main` commit
+      because its generated `data` branch carries none.
+      - *The finding:* a single "pass rate" is a badge that lies. With today's
+        stubbed parser — a function whose body is `return Err` — the blended
+        figure would publish **66.4% JSON conformance** and 23.4% YAML, because
+        rejecting everything is perfect on the must-reject class. Accept-rate and
+        reject-rate are therefore reported separately, ratcheted independently,
+        and there is no method that combines them. → **ADR-008**.
+      - `unrecorded` is an error, not a free pass: a conformance rate is
+        deterministic, unlike a benchmark baseline (ADR-006). All four thresholds
+        are `unrecorded`, which is what makes this red.
+      - *A claim I checked instead of publishing:* I expected the conformance and
+        K1 oracles to be mutually unsatisfiable, since K1 asserts round-trip on
+        three spec-invalid YAML files. Measured: **0 of yaml-test-suite's 94
+        must-reject cases involve invalid UTF-8 or control bytes** — all 94 are
+        structural, and our three awkward cases are encoding-level. The oracles
+        are compatible as written, so ADR-008 draws the accept/reject line at
+        structure and §3.2's `parse` signature stands unchanged.
 - [ ] `core-cst` representation implemented per ADR-001.
-- [ ] JSON parse/serialize — K1 on every corpus JSON file.
-- [ ] YAML parse/serialize — K1 including comments, anchors/aliases, merge keys,
-      quoting style, line endings, multi-document streams.
+- [x] **JSON parse/serialize.** Lossless, RFC 8259, three separate passes: a
+      total lexer covering every byte, an iterative validator, an order-preserving
+      builder. `Json::parse` is live; the three JSON oracles are green.
+      - K1 golden 18/18 · fuzz vacuity guard 18/18 seeds parse ·
+        **JSONTestSuite accept 95/95 (100%), reject 188/188 (100%)**, 22/35
+        implementation-defined accepted. Thresholds recorded at 1.0/1.0, so the
+        ratchet is at its ceiling and any regression fails.
+      - **K1 verified on 117 accepted JSONTestSuite documents** — third-party
+        input we did not write, a broader corpus than our 18 golden cases.
+        Anything accepted must round-trip: a lossless kernel that accepts a
+        document it cannot reproduce has broken its central promise.
+      - F1 under the fuzzer: 1,690,296 executions, 509 coverage points, no crash
+        and no K1 violation. Iterative throughout — JSONTestSuite ships 100,000
+        opening brackets, and a recursive parser aborts the process there.
+      - *Scope note:* MILESTONES said "K1 on every corpus JSON file" and the
+        corpus contains **zero** JSON files, so that claim is unmakeable as
+        written. The JSONTestSuite documents are the strongest substitute
+        available. Closing the gap properly needs a JSON corpus source, which
+        remains **[NEEDS-AYUSH-APPROVAL]** in PR #1.
+      - *Defect found:* libFuzzer **writes** coverage-increasing inputs into its
+        first corpus directory, so pointing the vacuity guard at the curated
+        seeds made it fail the moment the fuzzer did its job — one 1-byte input
+        (`}`) landed there and had already been committed. Curated seeds now
+        live in `fuzz/seeds/` (evidence, golden-guarded); `fuzz/corpus/` is
+        gitignored scratch.
+- [x] **YAML parse/serialize.** Lossless and structural, not semantic: total
+      lexer, line nesting by indentation, verbatim escape hatch. Comments,
+      anchors/aliases, merge keys, quoting style, line endings, multi-document
+      streams, block scalars and directives all round-trip.
+      - K1 golden **31/31** · fuzz vacuity 31/31 seeds ·
+        **yaml-test-suite accept 308/308 (100%), reject 1/94 (1.1%)**.
+      - F1 under the fuzzer: 1,619,579 executions, 708 coverage points, no crash
+        and no K1 violation.
+      - *A rule tried and removed:* a tab-in-indentation check rejected **12
+        documents yaml-test-suite calls valid** — tabs are legal in blank lines,
+        as separation, and before flow indicators. Rejecting valid input is the
+        worse error: a refused file is one konflux cannot help with at all.
+      - *K1 violation found on the real corpus, fixed by the §3.3 loop.* A `"`
+        inside a Go template — `service="{{ template "x" . }}"` — closed the YAML
+        quoted scalar early, and because YAML permits quoted scalars to span
+        lines the mis-parse ran 230 bytes into the next block scalar and ate its
+        header. Minimised to golden cases 045/046, confirmed red, then fixed:
+        a quote now only opens a scalar at a value position, never mid-token.
+- [x] Verbatim-node escape hatch — carrying Helm's `{{ }}`, which the survey
+      found in **41.2%** of corpus files. §3.1 frames it as a fallback for exotic
+      tags; on real config it is the main road for two files in five.
+- [x] **P1 (corpus half): K1 green on 750/750 corpus YAML files**, 10,043,614
+      bytes, zero violations and zero rejections. `cargo xtask corpus-k1`, wired
+      into the `corpus` CI job.
+- [!] **P1 is NOT met as written.** It asks for ≥1,000 real-world files; the
+      corpus is 750 YAML + 250 HCL, and HCL is Phase 2. Only 750 files are in a
+      format konflux's MVP speaks. Closing this needs more YAML/JSON corpus
+      sources — a reviewed change to evidence (§9.3, ADR-004), yours to approve.
+- [!] **GATE before M3:** yaml-test-suite reject-rate is **1.1%**. A lossless
+      structural parser detects almost no invalid YAML, which is harmless at M1
+      and dangerous the moment a merge exists — structurally merging a document
+      we failed to recognise as invalid is the "silently wrong" failure §0 ranks
+      first. The rate must rise substantially before M3 ships.
 - [ ] Verbatim-node escape hatch for anything the grammar cannot represent
       (§3.1: preserving beats understanding).
-- [ ] Delete `core_cst::roundtrip_identity`; re-point golden, fuzz and
-      determinism gates at the real pair (ADR-003).
+- [x] **Deleted `core_cst::roundtrip_identity`** and retired the
+      `roundtrip_identity` fuzz target, exactly as ADR-003 said would happen —
+      its doc comment said leaving it would be "a bug in the milestone, not a
+      feature".
+      - Its six golden cases were **preserved, not deleted**: they are now
+        `300`–`305` in the YAML round-trip suite, checked against the real
+        `parse`/`serialize` pair. All six still round-trip, which is what ADR-003
+        predicted when it said an input that round-trips under the empty grammar
+        must still round-trip under a real one.
+      - `crates/core-verify/tests/golden/roundtrip-identity/` remains as the
+        golden **runner's** own fixture, which is all it ever tested.
+      - Determinism re-pointed: `xtask parse-digest` emits the accept/reject
+        verdict and the SHA-256 of the serialised tree for all 55 golden cases,
+        double-built and double-run on Linux, Windows and macOS. K1 asks whether
+        the bytes came back; **K3 asks whether they come back the same way every
+        time**. The diagnostic text is hashed too — a parser whose *message*
+        varies between runs is as nondeterministic as one whose bytes do, and
+        those messages reach `--json`.
+      - Benchmarks re-pointed at the real parsers, names changed accordingly —
+        which `bench-compare`'s name-parity check makes a reviewed change rather
+        than a silent one.
 - [ ] Arm `gate/conformance` — publish pass rates **with the honest failure
       list** (P4).
-- [ ] Record calibrated benchmark baselines from a run on `main` (ADR-006).
+- [~] Record calibrated benchmark baselines from a run on `main` (ADR-006).
+      Names are recorded and the structural checks are blocking; the numbers stay
+      `uncalibrated` until taken from a CI run, since laptop timings are not
+      comparable to a shared runner and publishing them as if they were would be
+      a cherry-picked benchmark (Appendix C).
 - [ ] **P1 partial:** K1 green on all 1,000 corpus files. *Output required.*
 
 ### M2 — Structural diff

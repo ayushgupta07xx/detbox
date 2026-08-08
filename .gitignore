@@ -2,6 +2,10 @@
 # `fuzz/` is a detached workspace with its own build output and crash artifacts.
 /fuzz/target
 /fuzz/artifacts
+# libFuzzer's working corpus. It WRITES coverage-increasing inputs into its
+# first corpus directory, so it must never be the curated seed directory:
+# fuzz/seeds/ is evidence, fuzz/corpus/ is scratch.
+/fuzz/corpus
 # Spikes are detached workspaces with their own build output.
 /spikes/*/target
 # Determinism-gate scratch output.

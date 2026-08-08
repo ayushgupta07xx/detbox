@@ -1,0 +1,5 @@
+defaults: &d
+  a: 1
+child:
+  <<: *d
+  b: 2

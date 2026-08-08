@@ -1,6 +1,19 @@
 #! tolerance_pct = 10
 # Runner class: ubuntu-latest, GitHub-hosted, x86_64.
-# Calibrated numbers are recorded from a CI run on `main` and land as a
-# reviewed change. See benches/baselines/README.md and ADR-006.
-k1_identity_1kib	uncalibrated
-k1_identity_64kib	uncalibrated
+#
+# Names changed at konflux M1: the Phase-0 `k1_identity_*` benchmarks measured
+# `roundtrip_identity`, which ADR-003 deleted once real parsers existed. These
+# measure the real parse/serialize pair.
+#
+# Still `uncalibrated`. Numbers taken on a WSL2 laptop are not comparable to a
+# shared GitHub-hosted runner, and publishing them as if they were would be a
+# cherry-picked benchmark (Appendix C). Calibrated values are recorded from a CI
+# run on `main`, as a reviewed change. See ADR-006.
+#
+# What IS blocking today: the run happened, its output parses, every name here
+# still exists, and every benchmark that ran is named here.
+yaml_parse_small	uncalibrated
+yaml_parse_real	uncalibrated
+yaml_parse_64kib	uncalibrated
+json_parse_real	uncalibrated
+json_parse_64kib	uncalibrated

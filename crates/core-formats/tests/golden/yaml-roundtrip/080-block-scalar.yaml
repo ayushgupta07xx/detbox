@@ -1,0 +1,15 @@
+literal: |
+  line one
+    indented deeper
+  line three
+folded: >
+  this folds
+  onto one line
+strip: |-
+  no trailing newline
+keep: |+
+  keeps trailing newlines
+
+
+explicitIndent: |2
+   two-space indicator

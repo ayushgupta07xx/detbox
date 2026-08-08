@@ -1,0 +1,3 @@
+valid: utf8
+invalid: ÿþ€½
+after: still here

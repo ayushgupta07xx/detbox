@@ -1,0 +1,2 @@
+inline: "a {{ tpl "x" . }} b"
+after: 1
