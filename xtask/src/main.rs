@@ -11,11 +11,13 @@
 //! cargo xtask assert-equal <a> <b>     byte-compare two files; exit 1 if they differ
 //! cargo xtask corpus-verify            offline validation of corpora/sources/*.sources
 //! cargo xtask corpus-survey            which YAML constructs the corpus contains
+//! cargo xtask corpus-k1                K1 over every corpus file (konflux P1)
 //! cargo xtask bench-compare <dir> <baseline>   criterion output vs saved baseline
 //! ```
 
 mod bench;
 mod corpus;
+mod k1;
 mod report;
 mod sha256;
 mod survey;
@@ -37,6 +39,7 @@ fn main() -> ExitCode {
         "assert-equal" => cmd_assert_equal(rest),
         "corpus-verify" => cmd_corpus_verify(),
         "corpus-survey" => cmd_corpus_survey(),
+        "corpus-k1" => k1::run(&workspace_root()),
         "bench-compare" => cmd_bench_compare(rest),
         "-h" | "--help" | "help" => {
             usage();
@@ -67,6 +70,7 @@ fn usage() {
          \x20 assert-equal <a> <b>                byte-compare two files\n\
          \x20 corpus-verify                       validate corpora/sources/*.sources (offline)\n\
          \x20 corpus-survey                       which YAML constructs the corpus contains\n\
+         \x20 corpus-k1                           K1 over every corpus file (konflux P1)\n\
          \x20 bench-compare <dir> <baseline>      criterion output vs saved baseline"
     );
 }

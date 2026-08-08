@@ -50,10 +50,11 @@ fn run<F: Format>(format: &F, dir: &str, minimum_cases: usize) {
 
 #[test]
 fn yaml_k1_round_trip() {
-    // 29 cases: 17 covering constructs the corpus survey found in real files,
+    // 31 cases: 17 covering constructs the corpus survey found in real files,
     // 12 covering constructs the YAML spec allows but our corpus happens not to
-    // contain. K1 is a claim about YAML, not about our corpus.
-    run(&Yaml, "yaml-roundtrip", 29);
+    // contain, and 2 minimised from K1 violations the corpus itself produced.
+    // K1 is a claim about YAML, not about our corpus.
+    run(&Yaml, "yaml-roundtrip", 31);
 }
 
 #[test]

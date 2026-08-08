@@ -250,8 +250,39 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         (`}`) landed there and had already been committed. Curated seeds now
         live in `fuzz/seeds/` (evidence, golden-guarded); `fuzz/corpus/` is
         gitignored scratch.
-- [ ] YAML parse/serialize — K1 including comments, anchors/aliases, merge keys,
-      quoting style, line endings, multi-document streams.
+- [x] **YAML parse/serialize.** Lossless and structural, not semantic: total
+      lexer, line nesting by indentation, verbatim escape hatch. Comments,
+      anchors/aliases, merge keys, quoting style, line endings, multi-document
+      streams, block scalars and directives all round-trip.
+      - K1 golden **31/31** · fuzz vacuity 31/31 seeds ·
+        **yaml-test-suite accept 308/308 (100%), reject 1/94 (1.1%)**.
+      - F1 under the fuzzer: 1,619,579 executions, 708 coverage points, no crash
+        and no K1 violation.
+      - *A rule tried and removed:* a tab-in-indentation check rejected **12
+        documents yaml-test-suite calls valid** — tabs are legal in blank lines,
+        as separation, and before flow indicators. Rejecting valid input is the
+        worse error: a refused file is one konflux cannot help with at all.
+      - *K1 violation found on the real corpus, fixed by the §3.3 loop.* A `"`
+        inside a Go template — `service="{{ template "x" . }}"` — closed the YAML
+        quoted scalar early, and because YAML permits quoted scalars to span
+        lines the mis-parse ran 230 bytes into the next block scalar and ate its
+        header. Minimised to golden cases 045/046, confirmed red, then fixed:
+        a quote now only opens a scalar at a value position, never mid-token.
+- [x] Verbatim-node escape hatch — carrying Helm's `{{ }}`, which the survey
+      found in **41.2%** of corpus files. §3.1 frames it as a fallback for exotic
+      tags; on real config it is the main road for two files in five.
+- [x] **P1 (corpus half): K1 green on 750/750 corpus YAML files**, 10,043,614
+      bytes, zero violations and zero rejections. `cargo xtask corpus-k1`, wired
+      into the `corpus` CI job.
+- [!] **P1 is NOT met as written.** It asks for ≥1,000 real-world files; the
+      corpus is 750 YAML + 250 HCL, and HCL is Phase 2. Only 750 files are in a
+      format konflux's MVP speaks. Closing this needs more YAML/JSON corpus
+      sources — a reviewed change to evidence (§9.3, ADR-004), yours to approve.
+- [!] **GATE before M3:** yaml-test-suite reject-rate is **1.1%**. A lossless
+      structural parser detects almost no invalid YAML, which is harmless at M1
+      and dangerous the moment a merge exists — structurally merging a document
+      we failed to recognise as invalid is the "silently wrong" failure §0 ranks
+      first. The rate must rise substantially before M3 ships.
 - [ ] Verbatim-node escape hatch for anything the grammar cannot represent
       (§3.1: preserving beats understanding).
 - [ ] Delete `core_cst::roundtrip_identity`; re-point golden, fuzz and

@@ -457,6 +457,9 @@ dependencies = [
 [[package]]
 name = "xtask"
 version = "0.0.0"
+dependencies = [
+ "core-formats",
+]
 
 [[package]]
 name = "zerocopy"

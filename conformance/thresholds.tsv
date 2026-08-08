@@ -28,5 +28,22 @@
 # classes, so the ratchet is now at its ceiling and any regression fails.
 json-test-suite    accept  1.0
 json-test-suite    reject  1.0
-yaml-test-suite    accept  unrecorded
-yaml-test-suite    reject  unrecorded
+# Recorded 2026-08-08 from the first YAML parser. The two numbers say very
+# different things and that is the point of never blending them:
+#
+#   accept 1.0  — every valid document in the suite is accepted, which is what
+#                 K1 and konflux's usefulness depend on.
+#   reject      — low, and honestly so. This is a lossless *structural* parser;
+#                 it detects almost no invalid YAML because telling invalid
+#                 structure from unmodelled-but-valid content needs the block/flow
+#                 context tracking that arrives with semantic_view at M2.
+#
+# A tab-indentation rule was tried and removed: it rejected 12 documents the
+# suite calls valid. Rejecting valid input is the worse error — a refused file is
+# one konflux cannot help with at all.
+#
+# GATE: the reject rate must rise substantially before M3 ships a merge.
+# Structurally merging a document we failed to recognise as invalid is precisely
+# the "silently wrong" failure §0 ranks first. Recorded in MILESTONES.
+yaml-test-suite    accept  1.0
+yaml-test-suite    reject  0.01

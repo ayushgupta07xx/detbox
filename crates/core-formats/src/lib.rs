@@ -54,6 +54,7 @@
 //! conformance oracles remain red by design.
 
 pub mod json;
+pub mod yaml;
 
 use core_cst::{Cst, Span};
 
@@ -196,8 +197,8 @@ impl Format for Yaml {
         &["yaml", "yml"]
     }
 
-    fn parse(&self, _input: &[u8]) -> Result<Cst, ParseReport> {
-        Err(ParseReport::not_implemented("yaml"))
+    fn parse(&self, input: &[u8]) -> Result<Cst, ParseReport> {
+        yaml::parse(input)
     }
 }
 
@@ -225,17 +226,25 @@ mod tests {
     use core_cst::Span;
 
     #[test]
-    fn parse_reports_rather_than_panicking_on_hostile_input() {
-        // F1 in its weakest form: it must not abort. The parser does not exist
-        // yet, so all this proves today is that the *contract* returns a value.
+    fn parse_returns_rather_than_panicking_on_hostile_input() {
+        // F1: `parse` must not abort, for any bytes at all. Whether it returns
+        // Ok or Err is the accept/reject question ADR-008 answers separately.
+        //
+        // This assertion used to be `is_err()`, which was written while both
+        // parsers were stubs and so encoded the stub's behaviour rather than the
+        // property it names. Two of these inputs are now legitimately accepted:
+        // a Go template is preserved verbatim (§3.1) and an anchor/alias
+        // document is ordinary YAML. Reaching the next line is the test.
         for hostile in [
             &b""[..],
             b"\xff\xfe\x00",
             b"{{ .Values.image | quote }}",
             b"a: &x\n  <<: *x\n",
+            b"\x00\x01\x02",
+            b"[[[[[[[[[[",
         ] {
-            assert!(Yaml.parse(hostile).is_err());
-            assert!(Json.parse(hostile).is_err());
+            let _ = Yaml.parse(hostile);
+            let _ = Json.parse(hostile);
         }
     }
 
