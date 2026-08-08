@@ -1,0 +1,3 @@
+key: "value	with	tabs"
+block: |
+  	tab inside a scalar

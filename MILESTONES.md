@@ -186,8 +186,22 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       unmet for half of M1's promise. The 18 JSON cases are grammar-derived.
       Adding a JSON corpus source changes what the proofs run against and is a
       reviewed change to evidence (§9.3, ADR-004) — yours to approve.
-- [ ] Oracle first: `yaml_roundtrip` and `json_roundtrip` fuzz targets. **Confirm
-      red.**
+- [x] Oracle first: `yaml_roundtrip` and `json_roundtrip` fuzz targets, corpus-
+      seeded from the golden cases (§3.3), both wired into `fuzz-smoke` and
+      `fuzz-nightly`. Each asserts **F1** (never panics, on any bytes) and **K1**
+      (round-trip when parse succeeds).
+      - **F1 measured:** 43M executions across the three targets, zero crashes.
+        Trivially true today — there is no parser to panic.
+      - *The finding:* a K1 fuzz target **cannot be red** while parse always
+        fails. It never reaches its assertion, so it reports success having
+        verified nothing — and unlike a golden suite there is no case count to
+        notice shrinking. Demonstrated: 200,000 inputs, exit 0, zero K1
+        assertions evaluated.
+      - The red therefore lives in a **non-vacuity guard**
+        (`crates/core-formats/tests/fuzz_seeds.rs`): every seed in a target's
+        corpus must parse, and the seed count must not fall behind the golden
+        suite. **Confirmed red 2026-08-08: 0 of 47 seeds parse.** This is what
+        makes the eventual green mean something.
 - [ ] Oracle first: yaml-test-suite + JSONTestSuite adapters at pinned revs,
       pass rate recorded as a threshold that may only rise. **Confirm red.**
 - [ ] `core-cst` representation implemented per ADR-001.

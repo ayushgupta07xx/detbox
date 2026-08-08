@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [roundtrip_identity]
+        target: [roundtrip_identity, yaml_roundtrip, json_roundtrip]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

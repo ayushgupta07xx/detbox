@@ -31,9 +31,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One entry per format per operation (§2). M1 adds yaml_roundtrip and
-        # json_roundtrip here in the same PR as the parser.
-        target: [roundtrip_identity]
+        # One target per format per operation (§2).
+        target: [roundtrip_identity, yaml_roundtrip, json_roundtrip]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
