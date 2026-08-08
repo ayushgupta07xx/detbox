@@ -1,0 +1,18 @@
+# Minimised from a K1 violation found on the real corpus:
+# prometheus-community/helm-charts prometheus-rabbitmq-exporter/values.yaml.
+#
+# A double quote INSIDE a Go template is not a YAML quote. Treating it as one
+# closes the scalar early, and because YAML permits quoted scalars to span
+# lines, the mis-parse then ran 230 bytes past the end of the line and swallowed
+# a block-scalar header.
+groups:
+  - name: rabbitmq
+    rules:
+      - alert: RabbitmqDown
+        expr: rabbitmq_up{service="{{ template "chart.fullname" . }}"} == 0
+        annotations:
+          description: |
+              The cluster tracked by {{ "{{ $labels.service }}" }} is down
+              and has too many connections {{ "{{ $value }}" }} (> 1000)
+        labels:
+          severity: warning

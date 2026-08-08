@@ -91,6 +91,21 @@ that pair contains a clear loser, and the strongest challenger was not in it.
 ## Consequences
 
 **What gets harder.**
+- **A refcounted tree needs a hand-written destructor.** Dropping a `GreenNode`
+  naively recurses — the child `Vec` drops each `Rc<GreenNode>`, whose drop
+  drops its children — and on a deeply nested document that overflows the stack
+  and **aborts the process** with `SIGABRT`. Not a catchable panic: a crash on
+  cleanup, after parsing had already "succeeded", which would defeat §3.2 F1 and
+  F2 from the one direction neither of them looks. `core-cst` therefore carries
+  an iterative `Drop` that unwinds the tree onto the heap, and two tests that
+  hold it: one dropping 100,000 levels, one proving a shared subtree survives
+  its sibling being dropped.
+
+  This was **not** anticipated when the decision was written. It was found the
+  next session by a test aimed at the *serializer*, which was already iterative.
+  Recording it rather than quietly patching it: the arena candidate has no
+  equivalent hazard — `Vec<Elem>` drops flat — so this is a real, if bounded,
+  cost of choosing A that the original Consequences section missed.
 - A red layer must be built and maintained. `locate` allocated 2,736 times over
   749 calls in the spike — an **upper bound**, since the naive `Rc<Red>` per step
   here is what real rowan amortises with an internal free-list. If profiling at

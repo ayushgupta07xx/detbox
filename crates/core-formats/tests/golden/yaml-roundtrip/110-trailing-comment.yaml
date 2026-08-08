@@ -1,0 +1,3 @@
+image: nginx       # aligned trailing comment
+port:  8080       # another one
+name: web  #no space before text

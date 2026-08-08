@@ -1,0 +1,6 @@
+quoted:
+  simple: "hello"
+  escaped: "line\nbreak and a \"quote\" and a \\ backslash"
+  unicode: "\u00e9\u4e2d"
+  slash: "a/b"
+  empty: ""

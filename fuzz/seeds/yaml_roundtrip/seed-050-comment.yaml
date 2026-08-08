@@ -1,0 +1,7 @@
+# Top-of-file comment block.
+# Second line, deliberately unaligned.
+
+#Comment with no space after the hash
+    # Indented comment at a level that matches nothing
+key: value
+# Trailing comment at end of file

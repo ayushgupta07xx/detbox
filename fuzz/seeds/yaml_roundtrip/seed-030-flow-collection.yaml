@@ -1,0 +1,6 @@
+flow:
+  map: {a: 1, b: 2}
+  seq: [1, 2, 3]
+  nested: {list: [x, {y: z}], empty: {}}
+  emptySeq: []
+  spaced: [ 1 ,  2 ]

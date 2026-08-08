@@ -1,3 +1,13 @@
+# Warnings are errors, here as well as in CI.
+#
+# `.github/workflows/ci.yml` sets `RUSTFLAGS: -D warnings`, and an environment
+# variable overrides this file — so CI is unchanged and a local run now matches
+# it. Without this, a `style`-level lint passes locally and fails in CI, which is
+# exactly the local/CI divergence ADR-002 exists to prevent. It cost a red PR
+# to notice.
+[build]
+rustflags = ["-D", "warnings"]
+
 [alias]
 # `cargo xtask <cmd>` — repo automation (MASTER_PLAN §2).
 xtask = "run --quiet --package xtask --"

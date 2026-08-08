@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: empty-values
+  labels:
+data:
+  present: "1"
+  absent:

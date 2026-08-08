@@ -40,6 +40,8 @@ jobs:
           n=$(find corpora/*/*/files -type f | wc -l)
           echo "corpus: $n files"
           [ "$n" -eq 1000 ] || { echo "::error::expected 1000 files, got $n"; exit 1; }
+      - name: K1 over every corpus file (konflux P1)
+        run: cargo run --release -p xtask -- corpus-k1
       - name: Nothing fetched may be committable
         run: |
           set -euo pipefail

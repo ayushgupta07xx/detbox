@@ -1,0 +1,49 @@
+#! schema = 1
+#
+# What we currently CLAIM for each official conformance suite.
+#
+# Two rates per suite, never one. A blended figure would reward rejecting
+# things: a parser that returns Err unconditionally scores 188/283 = 66% on
+# JSONTestSuite while parsing nothing. See crates/core-verify/src/conformance.rs.
+#
+#   accept  = valid inputs correctly accepted   (y_* / no `error` marker)
+#   reject  = invalid inputs correctly rejected (n_* / `error` marker present)
+#
+# Implementation-defined cases (JSONTestSuite's i_*) are measured and published
+# but never gated: the spec permits either answer.
+#
+# THIS FILE RATCHETS ONE WAY. Raising a threshold is a normal reviewed change.
+# Lowering one requires a [NEEDS-AYUSH-APPROVAL] header and sign-off (§8), and
+# golden-guard covers this path.
+#
+# `unrecorded` is an ERROR, not a free pass. A conformance rate is
+# deterministic — unlike a benchmark baseline, which may honestly be
+# `uncalibrated` because timings are machine-dependent (ADR-006) — so
+# `unrecorded` means no claim has been made yet, which is exactly the state
+# konflux M1 is in before a parser exists.
+#
+# suite            class   rate
+# Recorded 2026-08-08 from the measured result of the first JSON parser
+# (crates/core-formats/src/json.rs). 95/95 and 188/188 — a perfect score on both
+# classes, so the ratchet is now at its ceiling and any regression fails.
+json-test-suite    accept  1.0
+json-test-suite    reject  1.0
+# Recorded 2026-08-08 from the first YAML parser. The two numbers say very
+# different things and that is the point of never blending them:
+#
+#   accept 1.0  — every valid document in the suite is accepted, which is what
+#                 K1 and konflux's usefulness depend on.
+#   reject      — low, and honestly so. This is a lossless *structural* parser;
+#                 it detects almost no invalid YAML because telling invalid
+#                 structure from unmodelled-but-valid content needs the block/flow
+#                 context tracking that arrives with semantic_view at M2.
+#
+# A tab-indentation rule was tried and removed: it rejected 12 documents the
+# suite calls valid. Rejecting valid input is the worse error — a refused file is
+# one konflux cannot help with at all.
+#
+# GATE: the reject rate must rise substantially before M3 ships a merge.
+# Structurally merging a document we failed to recognise as invalid is precisely
+# the "silently wrong" failure §0 ranks first. Recorded in MILESTONES.
+yaml-test-suite    accept  1.0
+yaml-test-suite    reject  0.01

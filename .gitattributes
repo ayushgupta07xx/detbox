@@ -7,6 +7,6 @@
 # the K1 round-trip oracle. Any normalisation silently weakens the gate.
 **/tests/golden/**   -text -diff -merge
 **/tests/fixtures/** -text -diff -merge
-fuzz/corpus/**       -text -diff -merge
+fuzz/seeds/**        -text -diff -merge
 corpora/**           -text -diff
 benches/baselines/** -text -diff -merge

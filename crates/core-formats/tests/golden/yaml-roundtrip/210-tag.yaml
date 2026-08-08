@@ -1,0 +1,5 @@
+explicit: !!str 123
+binary: !!binary "R0lGODlhAQ=="
+custom: !MyType
+  field: 1
+shorthand: !<tag:example.com,2000:x> value

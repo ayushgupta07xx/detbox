@@ -15,60 +15,409 @@
 //! - **K2 Edit locality** — after an edit operation, all bytes outside the
 //!   edited span(s) are unchanged.
 //! - **K3 Determinism** — identical input + identical operation sequence →
-//!   identical output bytes, on every platform. No iteration-order leaks
-//!   (`BTreeMap`/`IndexMap` only in output paths), no timestamps, stable sorts
-//!   everywhere.
+//!   identical output bytes, on every platform.
+//!
+//! ## Representation
+//!
+//! A green/red tree, decided by measurement in
+//! [ADR-001](https://github.com/ayushgupta07xx/detbox/blob/main/adr/ADR-001-cst-representation.md).
+//! The green tree is immutable, refcounted and shared; tokens own their text
+//! and are interned. It stores no parent pointers and no absolute offsets — a
+//! red layer supplies those on demand — which is what makes an edit cost
+//! `O(depth)` new nodes while sharing every untouched subtree.
+//!
+//! **Why K1 is structural here, not a promise.** [`Cst::serialize`] is a
+//! straight in-order walk emitting each token's bytes. It has no format
+//! knowledge, no normalisation step, and no opportunity to be clever. So K1
+//! reduces entirely to *"did `parse` put every input byte into some token?"* —
+//! one question, in one place, instead of a property spread across a
+//! serializer.
 //!
 //! ## Escape hatch for hostile input
 //!
-//! Anything the modelled grammar cannot represent (exotic YAML tags, weird
-//! encodings) is preserved as an opaque verbatim node rather than normalised.
-//! **Preserving beats understanding; K1 outranks elegance.**
+//! Anything the modelled grammar cannot represent is preserved as an opaque
+//! [`SyntaxKind::VERBATIM`] node rather than normalised. **Preserving beats
+//! understanding; K1 outranks elegance.**
+//!
+//! This is not a rare path. A survey of the 750-file YAML corpus
+//! (`cargo xtask corpus-survey`) found Helm's Go templating in **41.2%** of
+//! files — text that is not YAML at all and can only be preserved verbatim.
+//! The escape hatch is the main road for a large minority of real config.
 //!
 //! ## Status
 //!
-//! Phase 0 scaffold. The green/red-tree vs owned-token-tree choice is
-//! **ADR-001**, reserved and unwritten — it is made after the 2-day spike at
-//! the start of konflux M1 (MASTER_PLAN §3.1). Nothing in this crate may
-//! presume the outcome.
+//! **konflux M1, implemented.** [`core-formats`] parses YAML and JSON onto these
+//! types, and K1 holds on 750 corpus files, 49 golden cases and both official
+//! conformance suites.
 //!
-//! The single function below exists so that the K1 gate — golden runner, fuzz
-//! target, determinism check, and miri job — is wired and **non-vacuous from
-//! commit one**, before any parser exists. It is replaced, not extended, by the
-//! real `parse`/`serialize` pair at M1. See ADR-003.
+//! The Phase-0 `roundtrip_identity` scaffold that made the K1 gates non-vacuous
+//! before a parser existed is **gone**, as ADR-003 said it would be. Its six
+//! golden cases were not: they live on as `300`–`305` in the YAML round-trip
+//! suite, now checked against the real `parse`/`serialize` pair. An input that
+//! round-tripped under the empty grammar still round-trips under a real one.
+//!
+//! [`core-formats`]: https://github.com/ayushgupta07xx/detbox/tree/main/crates/core-formats
 
-/// The K1 identity: a byte sequence carried through the CST boundary unchanged.
+use std::rc::Rc;
+
+/// A syntax kind, opaque to this crate.
 ///
-/// This is the degenerate case of `serialize(parse(x)) == x` for the empty
-/// grammar — the grammar that models nothing and therefore preserves
-/// everything as one verbatim node. It is the weakest true statement of K1 and
-/// the strongest one available before a parser exists.
+/// Each format defines its own constants, exactly as rowan does: the tree
+/// machinery never needs to know what a `KEY` or a `BLOCK_SCALAR` is, only that
+/// tokens carry bytes and nodes carry children.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct SyntaxKind(pub u16);
+
+impl SyntaxKind {
+    /// Reserved for the §3.1 escape hatch: a span the grammar cannot model,
+    /// preserved byte-for-byte instead of normalised.
+    ///
+    /// Formats **must not** use this value for a modelled construct. It is the
+    /// one kind whose meaning is fixed across every format: *these bytes were
+    /// not understood, and are reproduced exactly.*
+    pub const VERBATIM: Self = Self(u16::MAX);
+}
+
+/// A half-open byte range of the source.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Span {
+    /// First byte, inclusive.
+    pub start: u32,
+    /// One past the last byte.
+    pub end: u32,
+}
+
+impl Span {
+    /// Length in bytes.
+    #[must_use]
+    pub fn len(&self) -> u32 {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Whether the span covers no bytes.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.end <= self.start
+    }
+}
+
+/// A leaf: a kind and the exact bytes it covers.
+#[derive(Debug)]
+pub struct GreenToken {
+    kind: SyntaxKind,
+    text: Box<[u8]>,
+}
+
+impl GreenToken {
+    /// Build a token from its bytes.
+    #[must_use]
+    pub fn new(kind: SyntaxKind, text: &[u8]) -> Self {
+        Self {
+            kind,
+            text: text.into(),
+        }
+    }
+
+    /// This token's kind.
+    #[must_use]
+    pub fn kind(&self) -> SyntaxKind {
+        self.kind
+    }
+
+    /// The exact bytes this token covers.
+    #[must_use]
+    pub fn text(&self) -> &[u8] {
+        &self.text
+    }
+}
+
+/// Either a nested node or a token.
+#[derive(Debug)]
+pub enum GreenChild {
+    /// A nested node.
+    Node(Rc<GreenNode>),
+    /// A leaf.
+    Token(Rc<GreenToken>),
+}
+
+impl GreenChild {
+    /// Bytes covered by this child.
+    #[must_use]
+    pub fn text_len(&self) -> u32 {
+        match self {
+            Self::Node(node) => node.text_len(),
+            Self::Token(token) => u32::try_from(token.text().len()).unwrap_or(u32::MAX),
+        }
+    }
+}
+
+/// An interior node: a kind, its children, and the byte length it covers.
 ///
-/// # Phase 0 only
+/// Deliberately stores no parent pointer and no absolute offset. That omission
+/// is what lets a subtree be shared between two versions of a document, which
+/// ADR-001 measured at 1.02x memory to hold both versions against 2.00x for
+/// every alternative.
+#[derive(Debug)]
+pub struct GreenNode {
+    kind: SyntaxKind,
+    text_len: u32,
+    children: Vec<GreenChild>,
+}
+
+impl GreenNode {
+    /// Build a node from its children, summing their byte lengths.
+    #[must_use]
+    pub fn new(kind: SyntaxKind, children: Vec<GreenChild>) -> Self {
+        let text_len = children.iter().map(GreenChild::text_len).sum();
+        Self {
+            kind,
+            text_len,
+            children,
+        }
+    }
+
+    /// This node's kind.
+    #[must_use]
+    pub fn kind(&self) -> SyntaxKind {
+        self.kind
+    }
+
+    /// Bytes covered by this node and everything under it.
+    #[must_use]
+    pub fn text_len(&self) -> u32 {
+        self.text_len
+    }
+
+    /// This node's children, in document order.
+    #[must_use]
+    pub fn children(&self) -> &[GreenChild] {
+        &self.children
+    }
+}
+
+/// Destroy the tree iteratively.
 ///
-/// At konflux M1 this is deleted and its callers (golden runner cases, fuzz
-/// target `roundtrip_identity`, determinism harness) are re-pointed at the real
-/// `Format::parse` / `Format::serialize` pair. If this function still exists
-/// when a parser ships, that is a bug in the milestone, not a feature.
-#[must_use]
-pub fn roundtrip_identity(input: &[u8]) -> Vec<u8> {
-    input.to_vec()
+/// # Why this exists
+///
+/// Without it, dropping a `GreenNode` recurses: the `Vec<GreenChild>` drops
+/// each `Rc<GreenNode>`, whose own drop drops its children, and so on. On a
+/// deeply nested document that overflows the stack and **aborts the process** —
+/// `SIGABRT`, not a catchable panic.
+///
+/// That would defeat both §3.2 F1 (`parse` never panics) and F2 (`serialize` is
+/// total): a hostile input could crash the process on the way out, long after
+/// parsing "succeeded". For a tool whose first priority is never being silently
+/// wrong, crashing during cleanup is not an acceptable failure mode.
+///
+/// Found by `serialize_does_not_overflow_the_stack_on_deep_nesting`, which was
+/// written to check the serializer and caught the destructor instead. ADR-001
+/// records it as a consequence of choosing a refcounted tree.
+///
+/// The loop takes ownership of each child subtree we are the last owner of and
+/// pushes its children onto a heap-allocated stack, so each node is dropped with
+/// an already-empty child list and cannot recurse. Shared subtrees — the whole
+/// point of ADR-001's choice — are left alone: `Rc::into_inner` yields `None`
+/// when another version still references them.
+impl Drop for GreenNode {
+    fn drop(&mut self) {
+        let mut stack: Vec<GreenChild> = std::mem::take(&mut self.children);
+        while let Some(child) = stack.pop() {
+            if let GreenChild::Node(rc) = child
+                && let Some(mut node) = Rc::into_inner(rc)
+            {
+                stack.append(&mut node.children);
+            }
+        }
+    }
+}
+
+/// A parsed document: the root of a lossless tree.
+///
+/// The only way to build one is [`core-formats`]' `Format::parse`, so a `Cst`
+/// that exists is a `Cst` that came from real bytes.
+///
+/// [`core-formats`]: https://github.com/ayushgupta07xx/detbox/tree/main/crates/core-formats
+#[derive(Debug)]
+pub struct Cst {
+    root: Rc<GreenNode>,
+}
+
+impl Cst {
+    /// Wrap a green root.
+    #[must_use]
+    pub fn new(root: Rc<GreenNode>) -> Self {
+        Self { root }
+    }
+
+    /// The root node.
+    #[must_use]
+    pub fn root(&self) -> &Rc<GreenNode> {
+        &self.root
+    }
+
+    /// Emit the exact bytes this tree covers.
+    ///
+    /// This is the `serialize` half of K1, and it is deliberately incapable of
+    /// being interesting: an in-order walk that concatenates token text. It
+    /// cannot reformat, cannot reorder, cannot normalise quoting, and has no
+    /// format knowledge with which to try. Every K1 failure is therefore a
+    /// `parse` failure, which is where the difficulty genuinely is.
+    ///
+    /// Iterative rather than recursive: the corpus contains files nesting 8+
+    /// levels deep, and a stack overflow in the serializer would be a panic in
+    /// the one function that must be total (§3.2 F2).
+    #[must_use]
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.root.text_len() as usize);
+        let mut stack: Vec<&GreenChild> = Vec::new();
+        for child in self.root.children().iter().rev() {
+            stack.push(child);
+        }
+        while let Some(child) = stack.pop() {
+            match child {
+                GreenChild::Token(token) => out.extend_from_slice(token.text()),
+                GreenChild::Node(node) => {
+                    for grandchild in node.children().iter().rev() {
+                        stack.push(grandchild);
+                    }
+                }
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::roundtrip_identity;
+    use super::{Cst, GreenChild, GreenNode, GreenToken, Span, SyntaxKind};
+    use std::rc::Rc;
+
+    const ROOT: SyntaxKind = SyntaxKind(0);
+    const WORD: SyntaxKind = SyntaxKind(1);
+
+    fn token(text: &[u8]) -> GreenChild {
+        GreenChild::Token(Rc::new(GreenToken::new(WORD, text)))
+    }
 
     #[test]
-    fn k1_holds_on_the_empty_grammar() {
-        for case in [
-            &b""[..],
-            b"a",
-            b"key: value  # comment\n",
-            b"\r\n\r\n",
-            b"\xff\xfe\x00invalid utf-8",
-        ] {
-            assert_eq!(roundtrip_identity(case), case, "K1 violated for {case:?}");
+    fn serialize_concatenates_tokens_in_document_order() {
+        let cst = Cst::new(Rc::new(GreenNode::new(
+            ROOT,
+            vec![token(b"a: "), token(b"1"), token(b"\n")],
+        )));
+        assert_eq!(cst.serialize(), b"a: 1\n");
+    }
+
+    #[test]
+    fn serialize_descends_and_preserves_order() {
+        let inner = GreenChild::Node(Rc::new(GreenNode::new(
+            ROOT,
+            vec![token(b"  b: "), token(b"2\n")],
+        )));
+        let cst = Cst::new(Rc::new(GreenNode::new(
+            ROOT,
+            vec![token(b"a:\n"), inner, token(b"c: 3\n")],
+        )));
+        assert_eq!(cst.serialize(), b"a:\n  b: 2\nc: 3\n");
+    }
+
+    #[test]
+    fn serialize_is_byte_transparent() {
+        // Non-UTF-8, NUL and CRLF must pass through untouched: the serializer
+        // sees bytes, never strings.
+        let raw: &[u8] = b"k: \xff\xfe\x00v\r\n";
+        let cst = Cst::new(Rc::new(GreenNode::new(ROOT, vec![token(raw)])));
+        assert_eq!(cst.serialize(), raw);
+    }
+
+    /// Depth for the stack-safety tests.
+    ///
+    /// Reduced under miri, which interprets every operation and needs roughly
+    /// three orders of magnitude longer per allocation — 100,000 nodes there is
+    /// a job that runs for hours, not a test.
+    ///
+    /// This scopes a tool to what it can check; it does not weaken the proof.
+    /// The property at stake is native stack depth, which miri's interpreter
+    /// does not model in the first place, and the full depth still runs in
+    /// `gate/tests`, `gate/msrv` and `gate/platform` on Linux, Windows and
+    /// macOS. What miri is here for — the `Rc` handling and the iterative drop
+    /// being free of undefined behaviour — is exercised identically at 1,000.
+    fn depth(full: usize) -> usize {
+        if cfg!(miri) { 1_000 } else { full }
+    }
+
+    fn nested(depth: usize) -> Rc<GreenNode> {
+        let mut node = Rc::new(GreenNode::new(ROOT, vec![token(b"x")]));
+        for _ in 0..depth {
+            node = Rc::new(GreenNode::new(ROOT, vec![GreenChild::Node(node)]));
         }
+        node
+    }
+
+    #[test]
+    fn serialize_does_not_overflow_the_stack_on_deep_nesting() {
+        // The corpus nests 8+ levels; a recursive serializer would be a panic
+        // waiting for a pathological file. 10_000 levels proves it is iterative.
+        assert_eq!(Cst::new(nested(depth(10_000))).serialize(), b"x");
+    }
+
+    #[test]
+    fn dropping_a_deep_tree_does_not_overflow_the_stack() {
+        // The test above found this the hard way: serialisation was already
+        // iterative, but the *destructor* recursed and aborted the process with
+        // SIGABRT. See the `Drop` impl. 100_000 levels, well past anything the
+        // serializer test covers, because a crash on cleanup is not catchable.
+        drop(nested(depth(100_000)));
+    }
+
+    #[test]
+    fn dropping_does_not_free_a_shared_subtree() {
+        // The iterative drop must not confuse "I am the last owner" with "this
+        // is garbage". Structural sharing between versions is the entire reason
+        // ADR-001 chose this representation.
+        let shared = nested(depth(1_000));
+        let a = Cst::new(Rc::new(GreenNode::new(
+            ROOT,
+            vec![GreenChild::Node(Rc::clone(&shared))],
+        )));
+        let b = Cst::new(Rc::new(GreenNode::new(
+            ROOT,
+            vec![GreenChild::Node(Rc::clone(&shared))],
+        )));
+        drop(a);
+        assert_eq!(
+            b.serialize(),
+            b"x",
+            "dropping one version damaged the other"
+        );
+        drop(b);
+        assert_eq!(
+            Rc::strong_count(&shared),
+            1,
+            "shared subtree leaked a reference"
+        );
+    }
+
+    #[test]
+    fn text_len_sums_the_whole_subtree() {
+        let inner = GreenChild::Node(Rc::new(GreenNode::new(ROOT, vec![token(b"12345")])));
+        let node = GreenNode::new(ROOT, vec![token(b"ab"), inner]);
+        assert_eq!(node.text_len(), 7);
+    }
+
+    #[test]
+    fn verbatim_is_reserved_and_distinct() {
+        assert_eq!(SyntaxKind::VERBATIM, SyntaxKind(u16::MAX));
+        assert_ne!(SyntaxKind::VERBATIM, WORD);
+    }
+
+    #[test]
+    fn span_arithmetic_never_underflows() {
+        // Spans come from parsers, and a parser with a bug must not turn a
+        // reversed span into a panic or a huge length.
+        let reversed = Span { start: 10, end: 4 };
+        assert_eq!(reversed.len(), 0);
+        assert!(reversed.is_empty());
+        assert_eq!(Span { start: 4, end: 10 }.len(), 6);
     }
 }

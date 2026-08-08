@@ -31,10 +31,46 @@ assertion is genuinely wrong, propose the change under `[NEEDS-AYUSH-APPROVAL]`.
 
 ## Targets
 
-| Target | Invariant | Status |
+| Target | Invariants | Status |
 |---|---|---|
-| `roundtrip_identity` | K1 on the empty grammar | Phase 0, wired |
-| `yaml_roundtrip` | K1 for YAML | konflux M1 |
-| `json_roundtrip` | K1 for JSON | konflux M1 |
+| `roundtrip_identity` | K1 on the empty grammar | Phase 0 leftover; deleted when parse lands (ADR-003) |
+| `yaml_roundtrip` | F1 (never panics) + K1 | M1, wired, **vacuous until parse exists** |
+| `json_roundtrip` | F1 (never panics) + K1 | M1, wired, **vacuous until parse exists** |
 | `edit_locality` | K2 | strukt |
 | `merge_algebra` | P2 laws | konflux M3 |
+
+## The vacuity problem, and the guard
+
+A K1 target is shaped like this:
+
+```rust
+let Ok(cst) = format.parse(data) else { return };   // parse failed: nothing to check
+assert_eq!(format.serialize(&cst), data);           // the actual assertion
+```
+
+If `parse` never succeeds, the assertion is **never reached**. The target runs,
+finds no crash, and reports success — having verified nothing. Measured, not
+asserted:
+
+```text
+$ cargo +nightly fuzz run yaml_roundtrip fuzz/corpus/yaml_roundtrip -- -runs=200000
+#200000 DONE   cov: 39 ft: 40 corp: 1/1b
+Done 200000 runs in 0 second(s)
+exit=0
+```
+
+200,000 inputs, zero crashes, exit 0 — and not one K1 assertion evaluated. This
+is worse than a vacuous golden suite, which at least has a case count that
+visibly shrinks: a fuzz run that asserts nothing prints exactly what a
+productive one prints.
+
+A `fuzz_target!` cannot detect this itself; it sees one input at a time and has
+no memory across a run. So the guard lives outside the fuzzer, in
+`crates/core-formats/tests/fuzz_seeds.rs`: **every seed in a target's corpus
+must parse.** Seeds are copied from the K1 golden cases — inputs that by
+definition must round-trip — so a seed that does not parse is a parser bug or a
+case that does not belong.
+
+It also asserts the seed count has not fallen behind the golden suite, so adding
+a case without re-seeding is caught rather than silently narrowing what the
+fuzzer starts from.
