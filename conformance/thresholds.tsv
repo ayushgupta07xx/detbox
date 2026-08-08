@@ -23,7 +23,10 @@
 # konflux M1 is in before a parser exists.
 #
 # suite            class   rate
-json-test-suite    accept  unrecorded
-json-test-suite    reject  unrecorded
+# Recorded 2026-08-08 from the measured result of the first JSON parser
+# (crates/core-formats/src/json.rs). 95/95 and 188/188 — a perfect score on both
+# classes, so the ratchet is now at its ceiling and any regression fails.
+json-test-suite    accept  1.0
+json-test-suite    reject  1.0
 yaml-test-suite    accept  unrecorded
 yaml-test-suite    reject  unrecorded

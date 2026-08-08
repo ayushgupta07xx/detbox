@@ -49,9 +49,11 @@
 //!
 //! ## Status
 //!
-//! **konflux M1, oracle stage.** [`Yaml`] and [`Json`] exist and their `parse`
-//! returns [`ParseReport::not_implemented`]. The round-trip golden suites call
-//! them and are **red**, deliberately, until a parser lands.
+//! **konflux M1.** [`Json`] is implemented — see [`json`]. [`Yaml`]'s `parse`
+//! still returns [`ParseReport::not_implemented`], so its round-trip, fuzz and
+//! conformance oracles remain red by design.
+
+pub mod json;
 
 use core_cst::{Cst, Span};
 
@@ -212,8 +214,8 @@ impl Format for Json {
         &["json"]
     }
 
-    fn parse(&self, _input: &[u8]) -> Result<Cst, ParseReport> {
-        Err(ParseReport::not_implemented("json"))
+    fn parse(&self, input: &[u8]) -> Result<Cst, ParseReport> {
+        json::parse(input)
     }
 }
 

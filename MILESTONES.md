@@ -225,7 +225,31 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         are compatible as written, so ADR-008 draws the accept/reject line at
         structure and §3.2's `parse` signature stands unchanged.
 - [ ] `core-cst` representation implemented per ADR-001.
-- [ ] JSON parse/serialize — K1 on every corpus JSON file.
+- [x] **JSON parse/serialize.** Lossless, RFC 8259, three separate passes: a
+      total lexer covering every byte, an iterative validator, an order-preserving
+      builder. `Json::parse` is live; the three JSON oracles are green.
+      - K1 golden 18/18 · fuzz vacuity guard 18/18 seeds parse ·
+        **JSONTestSuite accept 95/95 (100%), reject 188/188 (100%)**, 22/35
+        implementation-defined accepted. Thresholds recorded at 1.0/1.0, so the
+        ratchet is at its ceiling and any regression fails.
+      - **K1 verified on 117 accepted JSONTestSuite documents** — third-party
+        input we did not write, a broader corpus than our 18 golden cases.
+        Anything accepted must round-trip: a lossless kernel that accepts a
+        document it cannot reproduce has broken its central promise.
+      - F1 under the fuzzer: 1,690,296 executions, 509 coverage points, no crash
+        and no K1 violation. Iterative throughout — JSONTestSuite ships 100,000
+        opening brackets, and a recursive parser aborts the process there.
+      - *Scope note:* MILESTONES said "K1 on every corpus JSON file" and the
+        corpus contains **zero** JSON files, so that claim is unmakeable as
+        written. The JSONTestSuite documents are the strongest substitute
+        available. Closing the gap properly needs a JSON corpus source, which
+        remains **[NEEDS-AYUSH-APPROVAL]** in PR #1.
+      - *Defect found:* libFuzzer **writes** coverage-increasing inputs into its
+        first corpus directory, so pointing the vacuity guard at the curated
+        seeds made it fail the moment the fuzzer did its job — one 1-byte input
+        (`}`) landed there and had already been committed. Curated seeds now
+        live in `fuzz/seeds/` (evidence, golden-guarded); `fuzz/corpus/` is
+        gitignored scratch.
 - [ ] YAML parse/serialize — K1 including comments, anchors/aliases, merge keys,
       quoting style, line endings, multi-document streams.
 - [ ] Verbatim-node escape hatch for anything the grammar cannot represent

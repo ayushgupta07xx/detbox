@@ -125,6 +125,39 @@ fn yaml_cases(root: &Path) -> Vec<Case> {
     cases
 }
 
+/// Everything we accept must round-trip.
+///
+/// K1 and conformance are not independent properties. A document this
+/// implementation *accepts* is one it claims to understand, and a lossless
+/// kernel that accepts a document it cannot reproduce byte-for-byte has broken
+/// its central promise on real, third-party input rather than on our own
+/// hand-written cases.
+///
+/// This runs over every accepted case in the suite, which for JSONTestSuite is
+/// 95 valid documents plus whatever implementation-defined cases we take — a
+/// broader K1 corpus than our 18 golden cases, and one we did not write.
+fn assert_accepted_cases_round_trip<F: Format>(format: &F, cases: &[Case]) -> usize {
+    let mut checked = 0usize;
+    for case in cases {
+        let Ok(cst) = format.parse(&case.bytes) else {
+            continue;
+        };
+        let serialised = format.serialize(&cst);
+        assert_eq!(
+            serialised, case.bytes,
+            "K1 VIOLATED on accepted conformance case `{}`: \
+             this implementation accepted a document it cannot reproduce",
+            case.name
+        );
+        checked += 1;
+    }
+    assert!(
+        checked > 0,
+        "no conformance case was accepted, so K1 was never exercised here"
+    );
+    checked
+}
+
 fn run_suite(
     suite: &str,
     cases: Vec<Case>,
@@ -162,7 +195,10 @@ fn json_test_suite() {
     require(&root, "json-test-suite");
     // 95 must-accept + 188 must-reject + 35 implementation-defined, at the
     // pinned commit. Asserted by conformance/fetch.sh as well.
-    run_suite("json-test-suite", json_cases(&root), 318, verdict_of(&Json));
+    let cases = json_cases(&root);
+    let checked = assert_accepted_cases_round_trip(&Json, &cases);
+    println!("K1 verified on {checked} accepted JSONTestSuite documents");
+    run_suite("json-test-suite", cases, 318, verdict_of(&Json));
 }
 
 #[test]

@@ -25,9 +25,16 @@
 //!
 //! # Status
 //!
-//! **RED.** `parse` is stubbed, so 0 of 47 seeds parse and both assertions
-//! fail. When a parser lands these go green, and from then on they are what
-//! stops the fuzz gate rotting into a very expensive no-op.
+//! # Seeds are not the fuzzer's corpus
+//!
+//! These live in `fuzz/seeds/`, not `fuzz/corpus/`. libFuzzer **writes** every
+//! coverage-increasing input it finds into its first corpus directory, and
+//! those finds are mostly invalid by design — so pointing this guard at the
+//! fuzzer's working directory makes it fail the moment the fuzzer does its job.
+//! Found exactly that way: one 1-byte input (`}`) appeared in the seed
+//! directory after a local run and tripped the guard.
+//!
+//! `fuzz/seeds/` is curated evidence; `fuzz/corpus/` is gitignored scratch.
 
 // Entirely test code; clippy's allow-*-in-tests covers only `#[test]` fns, and
 // the helpers below are shared by both tests.
@@ -60,7 +67,7 @@ fn files_in(dir: &Path) -> Vec<PathBuf> {
 /// that every seed reaches the K1 assertion.
 fn assert_seeds_exercise_k1<F: Format>(format: &F, target: &str, golden_suite: &str) {
     let root = repo_root();
-    let seeds = files_in(&root.join("fuzz/corpus").join(target));
+    let seeds = files_in(&root.join("fuzz/seeds").join(target));
     let golden = files_in(
         &root
             .join("crates/core-formats/tests/golden")
@@ -69,7 +76,7 @@ fn assert_seeds_exercise_k1<F: Format>(format: &F, target: &str, golden_suite: &
 
     assert!(
         !seeds.is_empty(),
-        "fuzz/corpus/{target} is empty. An unseeded K1 target explores from \
+        "fuzz/seeds/{target} is empty. An unseeded K1 target explores from \
          nothing and will spend its budget rediscovering that `{{` is a byte."
     );
 
@@ -78,7 +85,7 @@ fn assert_seeds_exercise_k1<F: Format>(format: &F, target: &str, golden_suite: &
     // what this format has to handle.
     assert!(
         seeds.len() >= golden.len(),
-        "fuzz/corpus/{target} has {} seeds but {golden_suite} has {} cases. \
+        "fuzz/seeds/{target} has {} seeds but {golden_suite} has {} cases. \
          Re-seed the corpus so the fuzzer starts from every known-interesting input.",
         seeds.len(),
         golden.len()
@@ -104,7 +111,7 @@ fn assert_seeds_exercise_k1<F: Format>(format: &F, target: &str, golden_suite: &
     assert_eq!(
         parsed,
         seeds.len(),
-        "\nVACUOUS FUZZ TARGET: {} of {} seeds in fuzz/corpus/{target} do not parse,\n\
+        "\nVACUOUS FUZZ TARGET: {} of {} seeds in fuzz/seeds/{target} do not parse,\n\
          so `{}_roundtrip` never reaches its K1 assertion for them and would report\n\
          success while verifying nothing.\n\n\
          Seeds come from the K1 golden cases — inputs that must round-trip, which\n\
