@@ -1,0 +1,29 @@
+#! schema = 1
+#
+# What we currently CLAIM for each official conformance suite.
+#
+# Two rates per suite, never one. A blended figure would reward rejecting
+# things: a parser that returns Err unconditionally scores 188/283 = 66% on
+# JSONTestSuite while parsing nothing. See crates/core-verify/src/conformance.rs.
+#
+#   accept  = valid inputs correctly accepted   (y_* / no `error` marker)
+#   reject  = invalid inputs correctly rejected (n_* / `error` marker present)
+#
+# Implementation-defined cases (JSONTestSuite's i_*) are measured and published
+# but never gated: the spec permits either answer.
+#
+# THIS FILE RATCHETS ONE WAY. Raising a threshold is a normal reviewed change.
+# Lowering one requires a [NEEDS-AYUSH-APPROVAL] header and sign-off (§8), and
+# golden-guard covers this path.
+#
+# `unrecorded` is an ERROR, not a free pass. A conformance rate is
+# deterministic — unlike a benchmark baseline, which may honestly be
+# `uncalibrated` because timings are machine-dependent (ADR-006) — so
+# `unrecorded` means no claim has been made yet, which is exactly the state
+# konflux M1 is in before a parser exists.
+#
+# suite            class   rate
+json-test-suite    accept  unrecorded
+json-test-suite    reject  unrecorded
+yaml-test-suite    accept  unrecorded
+yaml-test-suite    reject  unrecorded

@@ -1,0 +1,4 @@
+# Fetched conformance suites are NEVER committed — same discipline as
+# corpora/ (ADR-004): pinned fetch, not vendored copies.
+/json-test-suite/
+/yaml-test-suite/

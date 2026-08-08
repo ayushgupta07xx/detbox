@@ -104,6 +104,7 @@ jobs:
             '**/tests/golden/**' \
             'benches/baselines/**' \
             'corpora/sources/**' \
+            'conformance/thresholds.tsv' \
             'fuzz/corpus/**' || true)
           if [ -z "$touched" ]; then
             echo "No evidence files touched."
@@ -117,17 +118,21 @@ jobs:
             exit 0
           fi
           echo
-          echo "::error::Golden files, baselines, corpus manifests and fuzz seeds are"
+          echo "::error::Golden files, baselines, corpus manifests, conformance"
+          echo "::error::thresholds and fuzz seeds are"
           echo "::error::EVIDENCE (MASTER_PLAN §8). They may never be edited to make CI"
           echo "::error::pass. If the change is genuinely correct, put it in the PR body"
           echo "::error::under a [NEEDS-AYUSH-APPROVAL] header with justification."
           exit 1
 
   # --- Gate: Conformance suites --------------------------------------------
-  # ARMS AT konflux M1. There is no parser yet, so there is nothing to conform.
-  # What is blocking today: the adapter harness exists, runs, and reports.
-  # M1 adds yaml-test-suite / JSONTestSuite at pinned revs and publishes the
-  # pass rates as badges, including the honest failure lists (§4.1 P4).
+  # JSONTestSuite and yaml-test-suite at pinned commits, 720 cases. Accept-rate
+  # and reject-rate are ratcheted separately and never blended — see ADR-008 and
+  # conformance/README.md for why a single figure would publish 66.4% for a
+  # parser that does nothing.
+  #
+  # RED until a parser exists: every threshold is `unrecorded`, which this gate
+  # treats as an error rather than a free pass.
   conformance:
     name: gate/conformance
     runs-on: ubuntu-latest
@@ -136,13 +141,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Conformance harness smoke
-        run: |
-          set -euo pipefail
-          echo "Phase 0: no format implementations exist, so no conformance claim is made."
-          echo "Blocking today: the harness crate builds and its runner is reachable."
-          cargo test -p core-verify --all-features
-          echo "ARMS AT konflux M1 — see MILESTONES.md."
+      - name: Fetch suites at their pinned commits
+        run: conformance/fetch.sh
+      - name: Run the adapters, with the honest failure lists
+        run: cargo test -p core-formats --test conformance -- --nocapture
 
   # --- Gate: Differential suites -------------------------------------------
   # ARMS AT konflux M2. Today this proves the external oracles CI depends on are
@@ -286,4 +288,4 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck --severity=warning corpora/*.sh
+          shellcheck --severity=warning corpora/*.sh conformance/*.sh

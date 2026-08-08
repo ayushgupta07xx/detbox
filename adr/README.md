@@ -33,3 +33,4 @@ because 001 was held open for it.
 | [005](ADR-005-determinism-gate-mechanism.md) | Determinism = double-build + double-run output-hash compare, with an in-repo SHA-256 | accepted |
 | [006](ADR-006-benchmark-baselines.md) | Benchmark baselines are named-and-uncalibrated until recorded on CI | accepted |
 | [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | accepted |
+| [008](ADR-008-conformance-semantics.md) | Conformance: reject invalid *structure*, and two rates instead of one | proposed |

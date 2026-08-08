@@ -202,8 +202,28 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         corpus must parse, and the seed count must not fall behind the golden
         suite. **Confirmed red 2026-08-08: 0 of 47 seeds parse.** This is what
         makes the eventual green mean something.
-- [ ] Oracle first: yaml-test-suite + JSONTestSuite adapters at pinned revs,
-      pass rate recorded as a threshold that may only rise. **Confirm red.**
+- [x] Oracle first: yaml-test-suite + JSONTestSuite adapters at pinned revs.
+      **Confirmed red 2026-08-08.** 720 cases fetched with exact counts asserted:
+      JSONTestSuite 318 (95 accept / 188 reject / 35 implementation-defined),
+      yaml-test-suite 402 (308 / 94). Suites fetched, never vendored (ADR-004
+      discipline); yaml's licence comes from a separately pinned `main` commit
+      because its generated `data` branch carries none.
+      - *The finding:* a single "pass rate" is a badge that lies. With today's
+        stubbed parser — a function whose body is `return Err` — the blended
+        figure would publish **66.4% JSON conformance** and 23.4% YAML, because
+        rejecting everything is perfect on the must-reject class. Accept-rate and
+        reject-rate are therefore reported separately, ratcheted independently,
+        and there is no method that combines them. → **ADR-008**.
+      - `unrecorded` is an error, not a free pass: a conformance rate is
+        deterministic, unlike a benchmark baseline (ADR-006). All four thresholds
+        are `unrecorded`, which is what makes this red.
+      - *A claim I checked instead of publishing:* I expected the conformance and
+        K1 oracles to be mutually unsatisfiable, since K1 asserts round-trip on
+        three spec-invalid YAML files. Measured: **0 of yaml-test-suite's 94
+        must-reject cases involve invalid UTF-8 or control bytes** — all 94 are
+        structural, and our three awkward cases are encoding-level. The oracles
+        are compatible as written, so ADR-008 draws the accept/reject line at
+        structure and §3.2's `parse` signature stands unchanged.
 - [ ] `core-cst` representation implemented per ADR-001.
 - [ ] JSON parse/serialize — K1 on every corpus JSON file.
 - [ ] YAML parse/serialize — K1 including comments, anchors/aliases, merge keys,
