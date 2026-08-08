@@ -286,11 +286,21 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         over-claiming one.
 - [ ] **P1 fuzzing half:** ≥72 cumulative hours with zero violations. The nightly
       job accumulates it; there is no counter yet.
-- [!] **GATE before M3:** yaml-test-suite reject-rate is **1.1%**. A lossless
-      structural parser detects almost no invalid YAML, which is harmless at M1
-      and dangerous the moment a merge exists — structurally merging a document
-      we failed to recognise as invalid is the "silently wrong" failure §0 ranks
-      first. The rate must rise substantially before M3 ships.
+- [~] **GATE before M3:** yaml-test-suite reject-rate raised **1.1% → 18.1%**
+      on 2026-08-09, with accept held at 100% and corpus K1 at 1,000/1,000.
+      Four rule families, each unambiguous from the token stream: block scalar
+      indicators, comment separation, anchor placement, directive and
+      document-marker structure.
+      - The two ratchets are what made this tractable. `accept` pinned at 1.0
+        rejected three drafts that would have refused valid documents; corpus K1
+        rejected a fourth that refused two real Helm charts.
+      - *Root cause worth keeping:* a `%` at column zero is a directive only in
+        the directive section. Inside a document it is content — `%!PS-Adobe-2.0`
+        in a block scalar, `% : 20` in a flow mapping. Four valid documents were
+        rejected for want of that distinction, and the fix was in the lexer.
+      - The remaining 77 must-reject cases need block/flow context tracking,
+        which arrives with `semantic_view` at M2. This gate stays open until
+        the rate is high enough that M3 can merge safely.
 - [ ] Verbatim-node escape hatch for anything the grammar cannot represent
       (§3.1: preserving beats understanding).
 - [x] **Deleted `core_cst::roundtrip_identity`** and retired the

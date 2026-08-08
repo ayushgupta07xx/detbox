@@ -179,6 +179,12 @@ fn span(start: usize, end: usize) -> Span {
 pub fn lex(input: &[u8]) -> Lexed {
     let mut out = Lexed::default();
     let mut cur = Cursor { src: input, pos: 0 };
+    // A `%` at column zero is a directive only in the directive section: before
+    // any content, or after a `...` closes a document. Inside a document it is
+    // ordinary content — `%!PS-Adobe-2.0` inside a block scalar, `% : 20` inside
+    // a flow mapping. Four documents yaml-test-suite calls valid were rejected
+    // for want of this distinction.
+    let mut in_content = false;
 
     if input.starts_with(&[0xef, 0xbb, 0xbf]) {
         out.tokens.push(Token {
@@ -218,7 +224,7 @@ pub fn lex(input: &[u8]) -> Lexed {
         let neutral = cur.at_line_end() || cur.peek() == Some(b'#');
 
         // --- line body ------------------------------------------------------
-        lex_line_body(input, &mut cur, &mut out, ws_start);
+        lex_line_body(input, &mut cur, &mut out, ws_start, in_content);
 
         // --- terminator -----------------------------------------------------
         if !cur.done() {
@@ -246,10 +252,29 @@ pub fn lex(input: &[u8]) -> Lexed {
             }
         }
 
+        let end = u32::try_from(out.tokens.len()).unwrap_or(u32::MAX);
+        match out
+            .tokens
+            .get(line_first as usize..end as usize)
+            .unwrap_or_default()
+            .iter()
+            .find(|t| {
+                !matches!(
+                    t.kind,
+                    kind::SPACE | kind::INDENT | kind::NEWLINE | kind::COMMENT
+                )
+            })
+            .map(|t| t.kind)
+        {
+            Some(kind::DOC_END) => in_content = false,
+            Some(kind::DIRECTIVE) | None => {}
+            Some(_) => in_content = true,
+        }
+
         out.lines.push(LineSpan {
             indent: if neutral { u32::MAX } else { indent_cols },
             first: line_first,
-            end: u32::try_from(out.tokens.len()).unwrap_or(u32::MAX),
+            end,
         });
     }
 
@@ -261,9 +286,17 @@ pub fn lex(input: &[u8]) -> Lexed {
 // would scatter the ordering that makes byte coverage total — the property K1
 // rests on — across several functions where it could not be read at a glance.
 #[allow(clippy::too_many_lines)]
-fn lex_line_body(input: &[u8], cur: &mut Cursor<'_>, out: &mut Lexed, line_start: usize) {
-    // Directives own the whole line, and only at column zero.
-    if cur.pos == line_start
+fn lex_line_body(
+    input: &[u8],
+    cur: &mut Cursor<'_>,
+    out: &mut Lexed,
+    line_start: usize,
+    in_content: bool,
+) {
+    // Directives own the whole line, at column zero, and only in the directive
+    // section — see `in_content` at the call site.
+    if !in_content
+        && cur.pos == line_start
         && cur.peek() == Some(b'%')
         && line_start_is_column_zero(input, cur.pos)
     {
@@ -597,18 +630,324 @@ fn indent_width_at(input: &[u8], line_start: usize) -> u32 {
 
 /// Structural checks, over and above the lexical ones [`lex`] already reports.
 ///
-/// The set enforced today is small, and `conformance/thresholds.tsv` records the
-/// reject-rate this actually achieves rather than one we would like. Raising it
-/// is incremental work with a ratchet behind it.
+/// # How rules get added here
+///
+/// Two ratchets constrain every rule, and together they make this tractable:
+///
+/// - `yaml-test-suite accept` is pinned at **1.0**. A rule that rejects even one
+///   valid document fails CI. This is what a tab-indentation rule violated when
+///   it was tried and removed — it rejected 12 valid documents.
+/// - konflux **P1** requires K1 on 1,000 corpus files. A rule that refuses a real
+///   Helm chart fails that too.
+///
+/// So rules may only be added where invalidity is unambiguous from the token
+/// stream. Anything needing block/flow context tracking waits for
+/// `semantic_view` at M2. The reject-rate `conformance/thresholds.tsv` records
+/// is whatever this honestly achieves.
 #[must_use]
-pub fn validate(lexed: &Lexed) -> Vec<Diagnostic> {
-    // Every rule enforced today is lexical and already reported by `lex`. This
-    // function exists so the structural rules that arrive incrementally have a
-    // home, and so `parse`'s shape does not change when they do. It returning
-    // empty is a statement about how little we currently check, which is what
-    // the recorded reject-rate says out loud.
-    let _ = lexed;
-    Vec::new()
+pub fn validate(lexed: &Lexed, input: &[u8]) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    for token in &lexed.tokens {
+        if token.kind == kind::ERROR {
+            // Already diagnosed lexically; repeating it adds noise.
+            return diagnostics;
+        }
+    }
+    check_block_headers(lexed, input, &mut diagnostics);
+    check_comments(lexed, input, &mut diagnostics);
+    check_anchors(lexed, &mut diagnostics);
+    check_document_structure(lexed, input, &mut diagnostics);
+    diagnostics
+}
+
+fn text_of(input: &[u8], token: Token) -> &[u8] {
+    input
+        .get(token.span.start as usize..token.span.end as usize)
+        .unwrap_or_default()
+}
+
+/// Block scalar headers: `|` and `>` with their indicators.
+///
+/// The indentation indicator is a single digit `1`–`9` (`0` is not a valid
+/// indentation) and at most one chomping indicator may appear. And nothing but
+/// whitespace and a comment may follow the header on its line — `folded: > text`
+/// is not a folded scalar with content, it is an error.
+fn check_block_headers(lexed: &Lexed, input: &[u8], diagnostics: &mut Vec<Diagnostic>) {
+    for (idx, token) in lexed.tokens.iter().enumerate() {
+        if token.kind == kind::BLOCK_HEADER {
+            let text = text_of(input, *token);
+            let indicators = text.get(1..).unwrap_or_default();
+            let digits = indicators.iter().filter(|b| b.is_ascii_digit()).count();
+            let chomps = indicators
+                .iter()
+                .filter(|b| matches!(b, b'+' | b'-'))
+                .count();
+            if digits > 1 {
+                diagnostics.push(Diagnostic::new(
+                    token.span,
+                    "block scalar indentation indicator is a single digit 1-9",
+                ));
+            } else if indicators.contains(&b'0') {
+                diagnostics.push(Diagnostic::new(
+                    token.span,
+                    "block scalar indentation indicator 0 is not valid",
+                ));
+            }
+            if chomps > 1 {
+                diagnostics.push(Diagnostic::new(
+                    token.span,
+                    "block scalar has more than one chomping indicator",
+                ));
+            }
+            // A comment must be separated from the header by whitespace.
+            if input.get(token.span.end as usize) == Some(&b'#') {
+                diagnostics.push(Diagnostic::new(
+                    token.span,
+                    "comment must be preceded by whitespace",
+                ));
+            }
+            continue;
+        }
+
+        // `folded: > first line` — the lexer could not treat `>` as a header
+        // because content follows, so it fell through to a plain scalar. In
+        // value position that is not a scalar named `>`, it is an error.
+        if token.kind == kind::PLAIN {
+            let text = text_of(input, *token);
+            if matches!(text.first(), Some(b'|' | b'>'))
+                && text.len() <= 3
+                && text
+                    .iter()
+                    .skip(1)
+                    .all(|b| b.is_ascii_digit() || matches!(b, b'+' | b'-'))
+                && preceded_by_value_indicator(lexed, idx)
+                && !followed_by_template(lexed, idx)
+            {
+                diagnostics.push(Diagnostic::new(
+                    token.span,
+                    "text after a block scalar indicator must be on the following line",
+                ));
+            }
+        }
+    }
+}
+
+/// Whether the next significant token is a Go template.
+///
+/// `config.alloy: |- {{- include "chart.config" . }}` appears in the corpus:
+/// the template expands to the block body, so the indicator is doing its job
+/// and the text after it is Helm, not stray YAML. ADR-008 puts templates on the
+/// verbatim side of the accept/reject line, and this is that line in code.
+fn followed_by_template(lexed: &Lexed, idx: usize) -> bool {
+    lexed
+        .tokens
+        .get(idx + 1..)
+        .unwrap_or_default()
+        .iter()
+        .find(|t| !matches!(t.kind, kind::SPACE | kind::INDENT))
+        .is_some_and(|t| t.kind == SyntaxKind::VERBATIM)
+}
+
+/// Whether the previous significant token opens a value: `:` or `-`.
+fn preceded_by_value_indicator(lexed: &Lexed, idx: usize) -> bool {
+    lexed
+        .tokens
+        .get(..idx)
+        .unwrap_or_default()
+        .iter()
+        .rev()
+        .find(|t| !matches!(t.kind, kind::SPACE | kind::INDENT))
+        .is_some_and(|t| matches!(t.kind, kind::COLON | kind::DASH))
+}
+
+/// A `#` only starts a comment when preceded by whitespace or a line start.
+/// `key: "value"# nope` is an error, not a comment.
+fn check_comments(lexed: &Lexed, input: &[u8], diagnostics: &mut Vec<Diagnostic>) {
+    for token in &lexed.tokens {
+        if token.kind != kind::COMMENT || token.span.start == 0 {
+            continue;
+        }
+        let before = previous(input, token.span.start as usize);
+        if !matches!(before, Some(b' ' | b'\t' | b'\n' | b'\r')) {
+            diagnostics.push(Diagnostic::new(
+                token.span,
+                "comment must be preceded by whitespace",
+            ));
+        }
+    }
+}
+
+/// A node takes one anchor, and an alias is a complete node on its own.
+fn check_anchors(lexed: &Lexed, diagnostics: &mut Vec<Diagnostic>) {
+    // A running `previous` rather than a collected Vec: the allocation gate
+    // caught the Vec version costing 290 extra allocations across the golden
+    // suite, for a pass that needs to remember exactly one token.
+    let mut previous_kind: Option<SyntaxKind> = None;
+    for second in lexed
+        .tokens
+        .iter()
+        .filter(|t| !matches!(t.kind, kind::SPACE | kind::INDENT | kind::COMMENT))
+    {
+        // A newline ends the relationship. `list: &list\n  - a` anchors the
+        // sequence that follows and is valid; `&anchor - entry` on one line is
+        // not. An earlier version of this loop filtered newlines out and so
+        // could not tell them apart — it rejected golden case 120.
+        if second.kind == kind::NEWLINE {
+            previous_kind = None;
+            continue;
+        }
+        let was_anchor = previous_kind == Some(kind::ANCHOR);
+        previous_kind = Some(second.kind);
+        if !was_anchor {
+            continue;
+        }
+        match second.kind {
+            kind::ALIAS => diagnostics.push(Diagnostic::new(
+                second.span,
+                "an alias is a complete node and cannot carry an anchor",
+            )),
+            kind::ANCHOR => diagnostics.push(Diagnostic::new(
+                second.span,
+                "a node cannot have two anchors",
+            )),
+            kind::DASH => diagnostics.push(Diagnostic::new(
+                second.span,
+                "an anchor cannot precede a sequence entry indicator on the same line",
+            )),
+            _ => {}
+        }
+    }
+}
+
+/// Directives, document markers, and what may follow them.
+fn check_document_structure(lexed: &Lexed, input: &[u8], diagnostics: &mut Vec<Diagnostic>) {
+    let mut directives_pending = 0usize;
+    let mut yaml_directives = 0usize;
+
+    for line in &lexed.lines {
+        // Comments are not content. Treating a comment line as content made
+        // `# Global` reopen a document that `...` had just closed, and made a
+        // wrapped directive comment look like the start of one.
+        //
+        // Iterated twice rather than collected: the allocation gate caught the
+        // Vec version costing one allocation per line of every document.
+        let significant = || {
+            lexed
+                .tokens
+                .get(line.first as usize..line.end as usize)
+                .unwrap_or_default()
+                .iter()
+                .copied()
+                .filter(|t| {
+                    !matches!(
+                        t.kind,
+                        kind::SPACE | kind::INDENT | kind::NEWLINE | kind::COMMENT
+                    )
+                })
+        };
+        let Some(first) = significant().next() else {
+            continue;
+        };
+
+        match first.kind {
+            kind::DIRECTIVE => {
+                check_yaml_directive(input, first, &mut yaml_directives, diagnostics);
+                directives_pending += 1;
+            }
+            kind::DOC_START => {
+                directives_pending = 0;
+                yaml_directives = 0;
+            }
+            kind::DOC_END => {
+                if directives_pending > 0 {
+                    diagnostics.push(Diagnostic::new(
+                        first.span,
+                        "directives must be followed by `---` before the document ends",
+                    ));
+                    directives_pending = 0;
+                }
+                if significant().count() > 1 {
+                    diagnostics.push(Diagnostic::new(
+                        first.span,
+                        "nothing but a comment may follow a `...` document-end marker",
+                    ));
+                }
+                yaml_directives = 0;
+            }
+            _ => {
+                if directives_pending > 0 {
+                    diagnostics.push(Diagnostic::new(
+                        first.span,
+                        "directives must be followed by a `---` document start",
+                    ));
+                    directives_pending = 0;
+                }
+            }
+        }
+    }
+
+    if directives_pending > 0
+        && let Some(last) = lexed.tokens.last()
+    {
+        diagnostics.push(Diagnostic::new(
+            last.span,
+            "directives must be followed by a `---` document start",
+        ));
+    }
+}
+
+/// `%YAML` takes one parameter, appears at most once per document, and may be
+/// followed by a comment only if whitespace separates them.
+///
+/// There is deliberately no rule against a directive appearing after document
+/// content. It was tried and the suite disproved it: `---\nscalar\n%YAML 1.2\n`
+/// is valid, because once a document has started a leading `%` is content
+/// rather than a directive. Distinguishing the two needs document-level state
+/// this parser does not keep, so the rule was dropped rather than kept in a
+/// form that rejects valid input.
+fn check_yaml_directive(
+    input: &[u8],
+    token: Token,
+    yaml_directives: &mut usize,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let full = text_of(input, token);
+    // Strip a trailing comment, but only when whitespace precedes the `#`.
+    // `%YAML 1.1#...` is an error precisely because it does not.
+    let body = full
+        .iter()
+        .position(|b| *b == b'#')
+        .filter(|at| matches!(previous(full, *at), Some(b' ' | b'\t')))
+        .map_or(full, |at| full.get(..at).unwrap_or(full));
+
+    let fields: Vec<&[u8]> = body
+        .split(|b| matches!(b, b' ' | b'\t'))
+        .filter(|f| !f.is_empty())
+        .collect();
+
+    if fields.first() != Some(&&b"%YAML"[..]) {
+        return;
+    }
+    *yaml_directives += 1;
+    if *yaml_directives > 1 {
+        diagnostics.push(Diagnostic::new(
+            token.span,
+            "a document may carry only one %YAML directive",
+        ));
+    }
+    if fields.len() != 2 {
+        diagnostics.push(Diagnostic::new(
+            token.span,
+            "%YAML takes exactly one parameter, the version",
+        ));
+    } else if !fields.get(1).is_some_and(|v| {
+        v.split(|b| *b == b'.').count() == 2 && v.iter().all(|b| b.is_ascii_digit() || *b == b'.')
+    }) {
+        diagnostics.push(Diagnostic::new(
+            token.span,
+            "%YAML version must be `<major>.<minor>`",
+        ));
+    }
 }
 
 /// Parent line index for each line (`u32::MAX` = the document root).
@@ -745,7 +1084,7 @@ pub fn parse(input: &[u8]) -> Result<Cst, ParseReport> {
     if !lexed.diagnostics.is_empty() {
         return Err(ParseReport::new(lexed.diagnostics));
     }
-    let structural = validate(&lexed);
+    let structural = validate(&lexed, input);
     if !structural.is_empty() {
         return Err(ParseReport::new(structural));
     }
@@ -850,6 +1189,52 @@ mod tests {
             b"a: \"x\ty\"\n",
         ] {
             assert!(round_trips(case), "K1 violated for {case:?}");
+        }
+    }
+
+    #[test]
+    fn structural_violations_are_rejected() {
+        // Each of these is a yaml-test-suite must-reject case, reduced to the
+        // rule it exercises. They are here as well as in the conformance suite
+        // because the suite is fetched and these are committed.
+        for bad in [
+            &b"--- |0\n"[..],                  // indentation indicator 0
+            b"--- |10\n",                      // two-digit indicator
+            b"--- |+-\n",                      // two chomping indicators
+            b"---\nfolded: > first line\n",    // text after the indicator
+            b"block: ># comment\n  scalar\n",  // comment not separated
+            b"key: \"value\"# invalid\n",      // comment not separated
+            b"key1: &a value\nkey2: &b *a\n",  // anchor on an alias
+            b"&anchor - sequence entry\n",     // anchor before `-`
+            b"%YAML 1.2\n",                    // directive with no document
+            b"%YAML 1.2\n...\n",               // ditto
+            b"%YAML 1.2\n%YAML 1.2\n---\n",    // duplicate %YAML
+            b"%YAML 1.2 foo\n---\n",           // extra parameter
+            b"%YAML 1.1#...\n---\n",           // comment not separated
+            b"---\nkey: value\n... invalid\n", // content after `...`
+        ] {
+            assert!(parse(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn the_valid_neighbours_of_those_rules_are_accepted() {
+        // Every rule above was first written in a form that also rejected valid
+        // input. These are the documents that caught it — four from
+        // yaml-test-suite, one reduced from a Helm chart in the corpus.
+        for good in [
+            &b"---\nscalar\n%YAML 1.2\n"[..], // `%` is content inside a document
+            b"---\n{ matches\n% : 20 }\n...\n", // `%` inside a flow mapping
+            b"%YAML 1.2\n---\nDocument\n... # Suffix\n", // comment after `...`
+            b"%YAML 1.3 # Attempt parsing\n---\n", // comment after a directive
+            b"%FOO  bar baz # ignored\n     # continued\n---\n",
+            b"config: |- {{- include \"chart.config\" . }}\n", // Helm after an indicator
+            b"list: &list\n  - a\n  - b\ncopy: *list\n",       // anchor, then a sequence NEXT line
+        ] {
+            assert!(
+                round_trips(good),
+                "{good:?} should be accepted and round-trip"
+            );
         }
     }
 
