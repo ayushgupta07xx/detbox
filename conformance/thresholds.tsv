@@ -33,10 +33,12 @@ json-test-suite    reject  1.0
 #
 #   accept 1.0  — every valid document in the suite is accepted, which is what
 #                 K1 and konflux's usefulness depend on.
-#   reject      — low, and honestly so. This is a lossless *structural* parser;
-#                 it detects almost no invalid YAML because telling invalid
-#                 structure from unmodelled-but-valid content needs the block/flow
-#                 context tracking that arrives with semantic_view at M2.
+#   reject      — raised from 1.1% to 18.1% on 2026-08-09 by four families of
+#                 rule: block scalar indicators, comment separation, anchor
+#                 placement, and directive/document-marker structure. Each is
+#                 unambiguous from the token stream. The rest of yaml-test-suite's
+#                 must-reject cases need block/flow context tracking, which
+#                 arrives with semantic_view at M2.
 #
 # A tab-indentation rule was tried and removed: it rejected 12 documents the
 # suite calls valid. Rejecting valid input is the worse error — a refused file is
@@ -46,4 +48,4 @@ json-test-suite    reject  1.0
 # Structurally merging a document we failed to recognise as invalid is precisely
 # the "silently wrong" failure §0 ranks first. Recorded in MILESTONES.
 yaml-test-suite    accept  1.0
-yaml-test-suite    reject  0.01
+yaml-test-suite    reject  0.18

@@ -20,6 +20,13 @@ use std::path::{Path, PathBuf};
 
 use core_formats::{Format, Json, Yaml};
 
+/// konflux **P1**: *"K1 holds on a corpus of ≥1,000 real-world files."*
+///
+/// Counted over files in a format the MVP actually parses. The corpus also
+/// carries HCL for Phase 2, and counting those toward a proof that cannot yet
+/// touch them would be arithmetic dressed as evidence.
+const P1_CORPUS_MINIMUM: usize = 1_000;
+
 #[derive(Default)]
 struct Tally {
     files: usize,
@@ -131,9 +138,21 @@ fn report(by_format: &BTreeMap<&'static str, Tally>, unclaimed: usize) -> String
     if unclaimed > 0 {
         let _ = writeln!(
             out,
-            "\n  {unclaimed} corpus file(s) claimed by no format yet (HCL is Phase 2).\n  \
-             P1 asks for K1 on ≥1,000 real-world files; only {total_files} are in a\n  \
-             format konflux's MVP speaks, so P1 is NOT met by this corpus alone."
+            "\n  {unclaimed} corpus file(s) are in no format we parse yet (HCL, Phase 2)."
+        );
+    }
+    if total_files >= P1_CORPUS_MINIMUM {
+        let _ = writeln!(
+            out,
+            "  P1 corpus half: MET — {total_files} files in a format konflux parses,\n  \
+             all round-tripping. The fuzzing half (≥72 cumulative hours) is tracked\n  \
+             separately."
+        );
+    } else {
+        let _ = writeln!(
+            out,
+            "  P1 corpus half: NOT MET — needs ≥{P1_CORPUS_MINIMUM} files in a format\n  \
+             konflux parses, and only {total_files} are."
         );
     }
     out

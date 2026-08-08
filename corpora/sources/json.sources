@@ -1,0 +1,34 @@
+#! category = json
+#! cap = 250
+#
+# Real-world JSON. Added 2026-08-08 with Ayush's approval, to close konflux P1:
+# the original corpus was 750 YAML + 250 HCL, and HCL is Phase 2, so only 750
+# files were in a format konflux's MVP speaks. `corpus-k1` reported that rather
+# than quietly totalling 750 against a 1,000 target.
+#
+# Two sources from one repository at one revision, because they are genuinely
+# different shapes and a corpus of one shape proves one thing:
+#
+#   schemas — large, deeply nested, heavy on `$ref`, `pattern` regexes with
+#             escaped backslashes, and unicode escapes. p50 10 KiB, p90 110 KiB.
+#   tests   — small instance documents that exercise the same schemas.
+#             p50 484 bytes. Where the schemas stress nesting and escapes, these
+#             stress the small-file path that dominates real config.
+
+[source]
+name = schemastore-schemas
+repo = https://github.com/SchemaStore/schemastore.git
+rev = 3b6446ad8a077bac56f4a4796c0b7fd88927fc8e
+license = Apache-2.0
+license_file = LICENSE
+include = src/schemas/json/*.json
+max_files = 150
+
+[source]
+name = schemastore-tests
+repo = https://github.com/SchemaStore/schemastore.git
+rev = 3b6446ad8a077bac56f4a4796c0b7fd88927fc8e
+license = Apache-2.0
+license_file = LICENSE
+include = src/test/**/*.json
+max_files = 100

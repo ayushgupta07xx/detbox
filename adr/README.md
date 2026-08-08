@@ -26,11 +26,11 @@ because 001 was held open for it.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [001](ADR-001-cst-representation.md) | `core-cst` uses a green/red tree | proposed |
+| [001](ADR-001-cst-representation.md) | `core-cst` uses a green/red tree | accepted |
 | [002](ADR-002-toolchain-and-msrv.md) | Pinned toolchain and MSRV 1.90 | accepted |
 | [003](ADR-003-phase-0-gate-arming.md) | Phase-0 gates are wired non-vacuously, and arm on a published schedule | accepted |
 | [004](ADR-004-corpus-by-pinned-fetch.md) | Corpora are fetched at pinned SHAs with exact yields, never vendored | accepted |
 | [005](ADR-005-determinism-gate-mechanism.md) | Determinism = double-build + double-run output-hash compare, with an in-repo SHA-256 | accepted |
 | [006](ADR-006-benchmark-baselines.md) | Benchmark baselines are named-and-uncalibrated until recorded on CI | accepted |
 | [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | accepted |
-| [008](ADR-008-conformance-semantics.md) | Conformance: reject invalid *structure*, and two rates instead of one | proposed |
+| [008](ADR-008-conformance-semantics.md) | Conformance: reject invalid *structure*, and two rates instead of one | accepted |

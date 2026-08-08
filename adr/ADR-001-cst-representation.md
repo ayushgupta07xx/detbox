@@ -1,6 +1,6 @@
 # ADR-001: `core-cst` uses a green/red tree
 
-**Date:** 2026-08-07 · **Status:** proposed
+**Date:** 2026-08-07 · **Status:** accepted (2026-08-08)
 
 ## Context
 

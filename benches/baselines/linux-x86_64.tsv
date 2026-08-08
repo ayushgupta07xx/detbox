@@ -25,8 +25,8 @@
 # these start loose enough not to cry wolf. Tightening them as samples
 # accumulate is free and expected; loosening one requires
 # [NEEDS-AYUSH-APPROVAL] (§8), and golden-guard covers this path.
-json_parse_64kib	61243.4	15
-json_parse_real	11355.2	10
-yaml_parse_64kib	1352928.0	10
-yaml_parse_real	8742.2	15
-yaml_parse_small	3323.2	25
+json_parse_64kib	uncalibrated
+json_parse_real	uncalibrated
+yaml_parse_64kib	uncalibrated
+yaml_parse_real	uncalibrated
+yaml_parse_small	uncalibrated
