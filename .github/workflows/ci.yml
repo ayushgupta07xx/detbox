@@ -134,8 +134,14 @@ jobs:
   # conformance/README.md for why a single figure would publish 66.4% for a
   # parser that does nothing.
   #
-  # RED until a parser exists: every threshold is `unrecorded`, which this gate
-  # treats as an error rather than a free pass.
+  # ARMED at konflux M1 (ADR-003). All four rates are recorded, so `unrecorded`
+  # is now an error nobody can reach by accident, and the ratchet holds them.
+  #
+  # This job also verifies the PUBLICATION, not just the measurement:
+  # conformance/REPORT.md is regenerated from the pinned suites and byte-compared
+  # with the committed copy. A rate improved but not republished is stale; a rate
+  # edited by hand no longer matches the parser. Both are red here, and neither
+  # can be fixed by editing the file — see ADR-009.
   conformance:
     name: gate/conformance
     runs-on: ubuntu-latest
@@ -146,7 +152,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Fetch suites at their pinned commits
         run: conformance/fetch.sh
-      - name: Run the adapters, with the honest failure lists
+      - name: Run the adapters, and check the published report still holds
         run: |
           cargo test -p core-formats --features conformance-suites \
             --test conformance -- --nocapture

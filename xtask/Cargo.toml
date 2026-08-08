@@ -20,6 +20,11 @@ publish = false
 # corpus, and calling it through the same `Format` trait every product uses is
 # the point.
 core-formats = { path = "../crates/core-formats", version = "0.0.0" }
+# `conformance-report` renders the published pass rates (§4.1 P4). It shares the
+# harness's suite adapters and emitter rather than carrying a second copy: the
+# gate byte-compares this command's output, so two renderers would be two
+# answers to the same question.
+core-verify = { path = "../crates/core-verify", version = "0.0.0" }
 
 [lints]
 workspace = true
