@@ -33,10 +33,21 @@ cargo xtask corpus-verify
 | Category | Files | Sources | Feeds |
 |---|---:|---|---|
 | `helm-charts` | 400 | prometheus-community 150, grafana 130, bitnami 120 | konflux P1, M5 |
+| `json` | 250 | SchemaStore: schemas 150, test instances 100 | konflux P1 |
 | `terraform` | 250 | terraform-aws-modules: vpc 65, eks 85, rds 100 | strukt (HCL, Phase 2) |
 | `k8s-manifests` | 200 | kubernetes/examples 100, istio samples 100 | konflux M5 semantic layer |
 | `kustomize` | 150 | kubernetes-sigs/kustomize 72, argo-cd 78 | konflux P1, M5 |
-| **total** | **1,000** | | konflux **P1**: K1 on ≥1,000 real-world files |
+| **total** | **1,250** | of which **1,000** are YAML or JSON | konflux **P1**: K1 on ≥1,000 real-world files |
+
+### Why 1,250 and not 1,000
+
+The original cap was exactly 1,000, matching P1's wording. `cargo xtask corpus-k1`
+found the flaw in that arithmetic: 250 of those files are Terraform, HCL is
+Phase 2, and konflux's MVP could therefore only prove K1 on 750 of them. The
+tool reported that rather than totalling 750 against a 1,000 target.
+
+Adding 250 JSON files brings the **in-format** count to 1,000, which is what P1
+actually asks for. The HCL stays, unparsed, until Phase 2 claims it.
 | `lockfiles` | — | Phase 4 | lockproof P1 |
 | `pdfs` | — | Phase 4 | pdfsurgeon P1, P5 |
 | `csv` | — | Phase 3 | bigsheet P1, P2 |

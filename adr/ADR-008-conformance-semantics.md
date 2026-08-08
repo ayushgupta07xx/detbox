@@ -1,6 +1,6 @@
 # ADR-008: What conformance means for a lossless parser, and two rates instead of one
 
-**Date:** 2026-08-08 · **Status:** proposed
+**Date:** 2026-08-08 · **Status:** accepted (2026-08-08)
 
 ## Context
 

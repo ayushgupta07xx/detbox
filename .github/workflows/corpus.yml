@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   fetch:
-    name: corpus/fetch (1,000 files, exact yields)
+    name: corpus/fetch (1,250 files, exact yields)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,12 +34,12 @@ jobs:
         run: cargo run -p xtask -- corpus-verify
       - name: Fetch every category at its pinned SHA
         run: corpora/fetch.sh
-      - name: Assert the corpus is exactly 1,000 files
+      - name: Assert the corpus is exactly 1,250 files
         run: |
           set -euo pipefail
           n=$(find corpora/*/*/files -type f | wc -l)
           echo "corpus: $n files"
-          [ "$n" -eq 1000 ] || { echo "::error::expected 1000 files, got $n"; exit 1; }
+          [ "$n" -eq 1250 ] || { echo "::error::expected 1250 files, got $n"; exit 1; }
       - name: K1 over every corpus file (konflux P1)
         run: cargo run --release -p xtask -- corpus-k1
       - name: Nothing fetched may be committable

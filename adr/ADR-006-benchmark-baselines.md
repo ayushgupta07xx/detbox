@@ -80,6 +80,50 @@ Incidentally confirming the original decision not to calibrate locally: the same
 benchmarks run **30–38% faster on the WSL2 dev machine** than on the shared
 runner. Checked-in laptop numbers would have made every CI run a regression.
 
+## Amendment 2, 2026-08-08: timings cannot gate; allocations can
+
+Amendment 1 calibrated the baselines from a CI run on `main`. **The very next CI
+run flagged a 43% regression on a parser that had not changed by a byte.**
+
+Six runs of data explain it, and refute the obvious excuse:
+
+| | measurement |
+|---|---|
+| criterion's own 95% CI, within a run | **±0.6% – ±1.4%** |
+| the same benchmark, between runs | **+38% / −20%** |
+
+Criterion is measuring precisely; the thing being measured is not stable. And
+"the host was slow" does not fit: the failing run produced the **fastest** result
+of six for three benchmarks and the **slowest** for a fourth, in one job.
+
+No tolerance survives that. Wide enough not to cry wolf (±45%) is wide enough to
+miss any regression worth catching — and a gate that cries wolf is worse than no
+gate, because it teaches everyone to ignore red. That failure mode has already
+cost this repo two false alarms.
+
+**So the numeric gate moves to allocation counts.** `xtask alloc-profile` counts
+allocations for parse+serialize over the committed golden cases; `alloc-check`
+compares the result to `benches/baselines/allocations.tsv` **for equality**, with
+no tolerance, because there is no noise to tolerate. Verified identical across
+five consecutive runs and across debug and release builds.
+
+This is a *stricter* gate than the one it replaces, not a looser one. A single
+allocation appearing or disappearing fails it. And it follows the plan's own
+priority order: §0 puts deterministic, machine-verifiable measures above
+probabilistic ones, which is exactly the choice between a count and a stopwatch.
+
+Timings keep their structural gate — the run happened, the output parses, no
+benchmark vanished, none landed unrecorded — and the raw criterion data is still
+published, because §12 requires a benchmark table with methodology and raw data.
+They simply no longer decide whether CI is red. `linux-x86_64.tsv` returns to
+`uncalibrated`, which is now the honest state and not a placeholder.
+
+**What this costs.** Allocation count is a proxy. A change that makes the parser
+slower without changing its allocation behaviour — a worse inner loop, a bad
+branch — passes this gate. That is a real hole, and the honest mitigation is the
+published timing table rather than a threshold nobody can trust. If timing ever
+needs to gate, it needs a dedicated runner, not a wider tolerance.
+
 ## Consequences
 
 - The badge cannot say "no performance regressions" until numbers are
