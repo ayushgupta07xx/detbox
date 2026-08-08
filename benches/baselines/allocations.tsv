@@ -16,6 +16,12 @@
 # Fewer allocations is an improvement: record the new numbers. More is a
 # regression: explain it, then record them. Either way it is a reviewed change
 # (§8), and golden-guard covers this path.
+#
+# yaml 3130 -> 3132 on 2026-08-09: the entire structural validation pass costs
+# two allocations across 37 golden cases, both the field split in
+# `check_yaml_directive` for case 260's two directive lines. The first draft cost
+# 290 — a Vec per line and another for the whole token stream — and this gate is
+# what surfaced that.
 # format	cases	allocations	bytes
 json	18	2261	103550
-yaml	37	3130	125576
+yaml	37	3132	125704
