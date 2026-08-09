@@ -1,6 +1,6 @@
 # ADR-009: Publishing conformance rates without a service and without a hand-maintained number
 
-**Date:** 2026-08-09 · **Status:** proposed
+**Date:** 2026-08-09 · **Status:** accepted (2026-08-09)
 
 ## Context
 

@@ -34,8 +34,8 @@ because 001 was held open for it.
 | [006](ADR-006-benchmark-baselines.md) | Benchmark baselines are named-and-uncalibrated until recorded on CI | accepted |
 | [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | accepted |
 | [008](ADR-008-conformance-semantics.md) | Conformance: reject invalid *structure*, and two rates instead of one | accepted |
-| [009](ADR-009-publishing-conformance-rates.md) | Conformance rates are published as a generated file CI regenerates and byte-compares | proposed |
-| [010](ADR-010-flagship-is-konflux.md) | konflux is the flagship (D3), decided without the validation signal | proposed |
-| [011](ADR-011-diff-golden-contract.md) | The diff golden is the `--json` output, and it lands red-but-recorded | proposed |
-| [012](ADR-012-refusal-is-a-result.md) | A format with no semantic view is refused, never answered | proposed |
-| [013](ADR-013-semantic-coverage-is-measured.md) | YAML's semantic view, and publishing how much of the corpus it models | proposed |
+| [009](ADR-009-publishing-conformance-rates.md) | Conformance rates are published as a generated file CI regenerates and byte-compares | accepted |
+| [010](ADR-010-flagship-is-konflux.md) | konflux is the flagship (D3), decided without the validation signal | accepted |
+| [011](ADR-011-diff-golden-contract.md) | The diff golden is the `--json` output, and it lands red-but-recorded | accepted |
+| [012](ADR-012-refusal-is-a-result.md) | A format with no semantic view is refused, never answered | accepted |
+| [013](ADR-013-semantic-coverage-is-measured.md) | YAML's semantic view, and publishing how much of the corpus it models | accepted |

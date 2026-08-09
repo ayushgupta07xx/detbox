@@ -1,6 +1,6 @@
 # ADR-010: konflux is the flagship (D3), decided without the validation signal
 
-**Date:** 2026-08-09 · **Status:** proposed
+**Date:** 2026-08-09 · **Status:** accepted (2026-08-09)
 
 ## Context
 
@@ -57,10 +57,12 @@ reasons the repository can already defend:
    either branch. If konflux's launch reads as a failure by §14's kill rule,
    bigsheet is still there and the kernel it needs is more built, not less.
 
-> **[AYUSH]** The sentence above is assembled from what the plan already argues,
-> not from a rationale you gave. If your actual reason is different — and in an
-> interview it is your reason that gets asked about, not the plan's — replace
-> the paragraph before accepting this.
+> **On the provenance of that reasoning.** It is assembled from arguments the
+> master plan already makes, not from a rationale Ayush stated separately — the
+> instruction was "build konflux first". It was offered for replacement before
+> sign-off and **accepted as written on 2026-08-09**, so this is now the record.
+> Noted rather than quietly dropped, because §13's whole point is that the why
+> trail be truthful about where each why came from.
 
 ## Consequences
 
