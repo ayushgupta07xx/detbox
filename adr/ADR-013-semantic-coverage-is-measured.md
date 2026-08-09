@@ -114,3 +114,27 @@ been corrected to say so.
 ```bash
 corpora/fetch.sh && cargo xtask semantic-coverage
 ```
+
+---
+
+## Amendment 1 — block scalars carry source text, not folded text (2026-08-09)
+
+A block scalar's `value` is its source bytes — header and body — not the string
+YAML would fold it into. Implementing indentation stripping and chomping
+correctly is real spec work, and getting it subtly wrong makes two *different*
+strings compare equal, which is a diff that misses an edit.
+
+The cost is over-reporting: re-indenting a body, or switching `|` for `>`, reads
+as a semantic change when the folded string is unchanged. That is the same trade
+this ADR already took on numbers, in the same direction — **noisy is
+recoverable, silent is not.** Folding becomes worth implementing when a golden
+case shows the noise costing more than the risk.
+
+**A lexer wart found while doing it, and pinned rather than papered over:** a
+block body absorbs the file's trailing newline *only when nothing follows the
+block*. Same logical content, two different node texts, so comparing a block at
+end-of-file against the same content mid-file over-reports. Golden cases `180`
+and `181` pin both shapes, and a unit test states the rule.
+
+Coverage: YAML **48.4% → 57.2%**.
+

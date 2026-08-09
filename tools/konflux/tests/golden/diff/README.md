@@ -29,6 +29,8 @@ it points somewhere unhelpful.
 | `150-json-nested-change` | one line changed | `changed` · semantic at `/dependencies/left-pad` |
 | `160-flow-sequence-value-changed` | one line changed | `changed` · semantic at `/ports/1` — inside a flow sequence |
 | `170-flow-sequence-item-added` | one line changed | `added` · semantic at `/args/0` — `[]` is empty, not a scalar |
+| `180-block-scalar-content-changed` | one line changed | `changed` · semantic at `/script` — block at end of file, body owns the final newline |
+| `181-block-scalar-followed-by-a-key` | one line changed | `changed` · semantic at `/script` — same content, and the body does **not** own the newline because a line follows |
 | `900-identical` | nothing | nothing — **the control**, see below |
 
 **`010` against `130` is the pair that matters most.** Both reorder a
@@ -42,14 +44,18 @@ invents conflicts or loses changes.
 here on purpose: an oracle that no possible output satisfies is as broken as one
 everything satisfies, so the empty answer must be reachable and must be pinned.
 
-The other twelve all fail a diff that reports nothing, including the three
+The other fourteen all fail a diff that reports nothing, including the three
 formatting-only cases — which is why formatting changes are *reported* rather
 than left as an empty list. `the_suite_is_not_vacuous` asserts exactly this: it
-runs a null diff over the suite and requires 12 of 13 cases to fail. If someone
+runs a null diff over the suite and requires 14 of 15 cases to fail. If someone
 later makes formatting changes silent, that test goes red rather than the suite
 quietly becoming satisfiable by returning `[]`.
 
 ## Deliberately not here yet
+
+`180` against `181` is a lexer wart pinned as evidence: the same logical block
+scalar has different node text depending on whether anything follows it. Safe
+direction (it over-reports), and now written down rather than lurking.
 
 Two constructs whose *right answer is not yet obvious*, and guessing in a golden
 file is worse than omitting it, because a golden is evidence and this one would

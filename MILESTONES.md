@@ -32,18 +32,22 @@ YAML (ADR-012, ADR-013) have all landed. `UNIMPLEMENTED_CASES` reached zero and
 the ratchet came out, exactly as ADR-011 said it would.
 
 **Coverage is the number that matters, not the golden count.** `cargo xtask
-semantic-coverage` measures the corpus: **YAML 363/750 (48.4%)**, JSON 250/250,
-**total 61.3%**. The refusal ranking is the work queue in corpus order:
+semantic-coverage` measures the corpus: **YAML 429/750 (57.2%)**, JSON 250/250,
+**total 67.9%**. The refusal ranking is the work queue in corpus order:
 
 | Files | Not modelled yet |
 |---:|---|
-| 145 | a line that is neither a mapping entry nor a sequence item — Helm `{{ }}`, most likely |
-| 76 | block scalars |
+| 145 | Helm templates — a line that is neither a mapping entry nor a sequence item |
 | 74 | multi-document streams |
-| 25 | mapping entries and sequence items at the same level |
-| 23 | a value of several tokens (anchor, tag) |
+| 27 | mapping entries and sequence items at the same level |
+| 24 | a value of several tokens (anchor, tag) |
 
-konflux still declines half of real YAML. Refusing is safe (ADR-012), not free.
+**Helm templates are next by size and are not a parsing problem.** `{{- if
+.Values.rbac.create -}}` is control flow, not data: it decides whether the rest
+of the document exists. Treating those lines as ignorable would make two charts
+differing only in their condition diff as identical — silently wrong. Treating
+them as data invents a reading. **What it means to diff a template is a design
+question and an ADR, and part of it is Ayush's**, so it was not started blind.
 
 **Correction to the previous handoff.** It said `semantic_view` would close the
 yaml reject-rate gate. **It does not.** That gate is about `parse` refusing
@@ -612,9 +616,27 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         not, because inlining a 400-line subtree into a JSON field is
         unreadable. Reporting mapping *reorder* as formatting but flow↔block as
         nothing is an inconsistency worth a decision, and it is Ayush's.
-- [ ] **Helm templates, block scalars, multi-document streams** — the rest of
-      M2's coverage work, ordered by the corpus counts above. Each is a refusal
-      today (ADR-012), never a wrong answer.
+- [x] **Block scalars** — `|` and `>` with their indicators. Modelled as a
+      scalar carrying its own source text. → **ADR-013 amendment 1**.
+      - **Not folded, deliberately.** Implementing indentation stripping and
+        chomping correctly is spec work, and a subtle error makes two different
+        strings compare equal — a diff that misses an edit. The cost is
+        over-reporting a restyle as semantic, which is the trade already taken
+        on numbers and in the same direction.
+      - Coverage **48.4% → 57.2%** for YAML, **67.9%** overall.
+      - *Lexer wart found and pinned:* a block body absorbs the file's trailing
+        newline **only when nothing follows the block**. Golden cases `180` and
+        `181` pin both shapes rather than leaving it to surprise someone at M3.
+      - *A golden I wrote and then corrected, in the same unmerged PR:* case
+        `180`'s expected text was my prediction of the node's bytes and was
+        wrong by that newline. Recorded because §8 is about not weakening
+        evidence, and the distinction that matters is that this was an unmerged
+        draft corrected toward the truth, not a merged golden bent toward the
+        code. The code was right; the prediction was not.
+- [ ] **Helm templates** (145) — the largest remaining bucket, and a design
+      question before it is a coding one. See the handoff note above.
+- [ ] **Multi-document streams** (74) — needs `SemanticNode` to model a document
+      list, which is a structural change rather than another leaf type.
 - [ ] **Wire block/flow context back into `parse`** to raise the yaml
       reject-rate. The knowledge now exists in `semantic_view`; the validator
       does not use it. This is what the standing M3 gate actually needs.
