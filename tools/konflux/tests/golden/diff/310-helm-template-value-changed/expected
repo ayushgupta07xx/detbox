@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/name",
+      "kind": "changed",
+      "significance": "semantic",
+      "before": "{{ include \"chart.fullname\" . }}",
+      "after": "{{ include \"chart.shortname\" . }}"
+    }
+  ]
+}

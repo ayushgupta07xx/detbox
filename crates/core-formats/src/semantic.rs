@@ -70,6 +70,23 @@ pub enum SemanticNode {
     Mapping(Vec<(String, SemanticNode)>),
     /// Ordered items. Sequence order *is* meaning.
     Sequence(Vec<SemanticNode>),
+    /// A collection that also carries template lines — Helm's `{{- if }}` and
+    /// friends — which are control flow rather than data.
+    ///
+    /// A wrapper rather than a field on [`Self::Mapping`] so that every
+    /// collection without templates keeps exactly the shape and behaviour it
+    /// had. The cost is that a file gaining its *first* template compares as a
+    /// different shape and reports a replacement; a chart acquiring a
+    /// conditional is a large change anyway, and the alternative was reshaping
+    /// a type every existing case depends on. ADR-014.
+    Templated {
+        /// The data, with the template lines removed.
+        inner: Box<SemanticNode>,
+        /// Template lines in source order. Compared as an ordered list, so a
+        /// deleted `{{- end }}` is a deletion even when an identical one
+        /// remains — matching them by text would lose it silently.
+        templates: Vec<Scalar>,
+    },
     /// A multi-document stream: `---` separated documents, in order.
     ///
     /// Distinct from [`Self::Sequence`] on purpose. Both index the same way, so
@@ -93,6 +110,7 @@ impl SemanticNode {
             Self::Mapping(pairs) => format!("{{{} keys}}", pairs.len()),
             Self::Sequence(items) => format!("[{} items]", items.len()),
             Self::Stream(docs) => format!("<{} documents>", docs.len()),
+            Self::Templated { inner, .. } => inner.text(),
         }
     }
 
@@ -111,6 +129,20 @@ impl SemanticNode {
             }
             (Self::Sequence(a), Self::Sequence(b)) | (Self::Stream(a), Self::Stream(b)) => {
                 a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.same_value(y))
+            }
+            (
+                Self::Templated {
+                    inner: a,
+                    templates: at,
+                },
+                Self::Templated {
+                    inner: b,
+                    templates: bt,
+                },
+            ) => {
+                at.len() == bt.len()
+                    && at.iter().zip(bt).all(|(x, y)| x.value == y.value)
+                    && a.same_value(b)
             }
             _ => false,
         }
@@ -292,6 +324,8 @@ enum Line<'a> {
     Blank,
     /// `---` or `...` — a document boundary, meaningful only at the top level.
     Marker,
+    /// A line that is nothing but a template: `{{- if ... }}`, `{{- end }}`.
+    Template(Scalar),
 }
 
 /// Build the semantic view of a YAML tree.
@@ -444,6 +478,9 @@ fn classify(line: &GreenNode) -> Result<Line<'_>, Unmodelled> {
     };
 
     match first.kind() {
+        // One VERBATIM token and nothing else: a template line. Control flow,
+        // not data — it decides whether the lines around it exist at all.
+        core_cst::SyntaxKind::VERBATIM if tokens.len() == 1 => Ok(Line::Template(resolve(first))),
         kind::DASH => Ok(Line::Item {
             rest: tokens.get(1..).unwrap_or_default().to_vec(),
         }),
@@ -718,6 +755,7 @@ fn flow_value_at(
 fn node_from_lines(lines: &[&GreenNode]) -> Result<SemanticNode, Unmodelled> {
     let mut entries: Vec<(String, SemanticNode)> = Vec::new();
     let mut items: Vec<SemanticNode> = Vec::new();
+    let mut templates: Vec<Scalar> = Vec::new();
 
     let mut index = 0usize;
     while let Some(line) = lines.get(index) {
@@ -730,6 +768,14 @@ fn node_from_lines(lines: &[&GreenNode]) -> Result<SemanticNode, Unmodelled> {
             // guessing which side of it the surrounding keys belong to.
             Line::Marker => {
                 return Err(unmodelled("a document marker indented inside a collection"));
+            }
+            Line::Template(scalar) => {
+                if !nested.is_empty() {
+                    return Err(unmodelled(
+                        "a template line owning indented lines is not modelled yet (M2)",
+                    ));
+                }
+                templates.push(scalar);
             }
             Line::Item { rest } => items.push(item_value(&rest, &nested)?),
             Line::Entry { key, value } => {
@@ -763,7 +809,7 @@ fn node_from_lines(lines: &[&GreenNode]) -> Result<SemanticNode, Unmodelled> {
         }
     }
 
-    match (entries.is_empty(), items.is_empty()) {
+    let inner = match (entries.is_empty(), items.is_empty()) {
         // An empty document. Distinguishable from `key:` with no value only by
         // context, and neither is a collection.
         (true, true) => Ok(SemanticNode::Scalar(Scalar {
@@ -778,7 +824,15 @@ fn node_from_lines(lines: &[&GreenNode]) -> Result<SemanticNode, Unmodelled> {
         (false, false) => Err(unmodelled(
             "mapping entries and sequence items at the same level",
         )),
+    }?;
+
+    if templates.is_empty() {
+        return Ok(inner);
     }
+    Ok(SemanticNode::Templated {
+        inner: Box::new(inner),
+        templates,
+    })
 }
 
 /// A sequence item, which may be a scalar or a mapping that starts on the dash.
@@ -1132,14 +1186,74 @@ mod tests {
     }
 
     #[test]
-    fn a_line_we_cannot_classify_refuses_the_whole_document() {
-        // The load-bearing rule. Skipping the Helm template would produce a
-        // view claiming this document has one key, and a diff over it would
-        // report "no changes" for an edit inside the template.
-        let reason = yaml_refusal("a: 1\n{{- if .Values.x }}\nb: 2\n{{- end }}\n");
+    fn a_template_line_wraps_the_collection_it_sits_in() {
+        let SemanticNode::Templated { inner, templates } =
+            yaml_view("{{- if .Values.a }}\nkind: Role\n{{- end }}\n")
+        else {
+            panic!("expected a templated collection");
+        };
+        assert_eq!(templates.len(), 2);
+        assert_eq!(
+            templates.first().map(|t| t.text.as_str()),
+            Some("{{- if .Values.a }}")
+        );
         assert!(
-            !reason.is_empty(),
-            "a template must not be silently dropped"
+            matches!(*inner, SemanticNode::Mapping(_)),
+            "the data survives"
+        );
+    }
+
+    #[test]
+    fn a_template_used_as_a_value_is_just_a_scalar() {
+        // This already worked before templates were modelled as lines: a
+        // template is one VERBATIM token, so as a value it resolves like any
+        // other scalar. Pinned so it does not regress on the way past.
+        let SemanticNode::Mapping(pairs) = yaml_view("name: {{ include \"x\" . }}\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((_, SemanticNode::Scalar(value))) = pairs.first() else {
+            panic!("expected a scalar");
+        };
+        assert_eq!(value.value, "{{ include \"x\" . }}");
+    }
+
+    #[test]
+    fn deleting_one_of_two_identical_templates_is_not_silent() {
+        // The reason templates are an ordered list rather than matched by text.
+        // Charts repeat themselves — two `{{- end }}` in one collection is
+        // ordinary — and matching by text would let one be deleted with nothing
+        // noticing. Deleting an `{{- end }}` changes what the chart renders.
+        let two = yaml_view("{{- if .A }}\n{{- if .B }}\na: 1\n{{- end }}\n{{- end }}\n");
+        let one = yaml_view("{{- if .A }}\n{{- if .B }}\na: 1\n{{- end }}\n");
+        assert!(
+            !two.same_value(&one),
+            "a deleted `{{{{- end }}}}` went unnoticed"
+        );
+    }
+
+    #[test]
+    fn a_condition_change_is_a_change() {
+        assert!(
+            !yaml_view("{{- if .Values.a }}\nk: 1\n{{- end }}\n")
+                .same_value(&yaml_view("{{- if .Values.b }}\nk: 1\n{{- end }}\n")),
+            "two charts differing only in their condition compared equal"
+        );
+    }
+
+    #[test]
+    fn a_line_we_cannot_classify_refuses_the_whole_document() {
+        // The load-bearing rule. A bare word is not a mapping entry, a sequence
+        // item, a template or a marker, and skipping it would leave a view
+        // claiming this document has one key when it plainly has more in it.
+        //
+        // This used to use a Helm template as its example, which is now
+        // modelled — the third witness this suite has had to re-point as
+        // features landed, and a reminder that "what we cannot read" is a
+        // moving target while "we must not read it wrongly" is not.
+        let reason = yaml_refusal("a: 1\nstray\n");
+        assert!(
+            reason.contains("neither a mapping entry nor a sequence item"),
+            "got {reason:?}"
         );
     }
 

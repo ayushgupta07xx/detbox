@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "",
+      "kind": "changed",
+      "significance": "semantic",
+      "before": "{{- if .Values.rbac.create }}",
+      "after": "{{- if .Values.rbac.enabled }}"
+    }
+  ]
+}

@@ -259,6 +259,25 @@ fn walk(path: &str, a: &SemanticNode, b: &SemanticNode, out: &mut Vec<Change>) {
         // arm below rather than being diffed item against document.
         (SemanticNode::Sequence(x), SemanticNode::Sequence(y))
         | (SemanticNode::Stream(x), SemanticNode::Stream(y)) => walk_sequence(path, x, y, out),
+        (
+            SemanticNode::Templated {
+                inner: a_inner,
+                templates: a_templates,
+            },
+            SemanticNode::Templated {
+                inner: b_inner,
+                templates: b_templates,
+            },
+        ) => {
+            // Template changes are reported at the collection's own path, not
+            // at a path of their own. A `{{- if }}` has no key and no stable
+            // index a reader could point at, and inventing a path segment for
+            // it would either collide with a real key or mean nothing. The
+            // before/after text says which template moved; the path says where
+            // (ADR-014).
+            walk_templates(path, a_templates, b_templates, out);
+            walk(path, a_inner, b_inner, out);
+        }
         // A mapping where a sequence was is not two edits, it is one
         // replacement, and describing it as anything finer would be invention.
         _ => out.push(Change {
@@ -269,6 +288,66 @@ fn walk(path: &str, a: &SemanticNode, b: &SemanticNode, out: &mut Vec<Change>) {
             after: Some(b.text()),
         }),
     }
+}
+
+/// Template lines: an ordered list, aligned like a sequence, reported at the
+/// collection's path.
+///
+/// Ordered rather than matched by text, because charts repeat themselves: a
+/// mapping can hold two identical `{{- end }}` lines, and matching by text
+/// would let one be deleted without anything noticing. Deleting an `{{- end }}`
+/// changes what the chart renders.
+fn walk_templates(
+    path: &str,
+    a: &[core_formats::Scalar],
+    b: &[core_formats::Scalar],
+    out: &mut Vec<Change>,
+) {
+    let as_nodes = |xs: &[core_formats::Scalar]| -> Vec<SemanticNode> {
+        xs.iter().cloned().map(SemanticNode::Scalar).collect()
+    };
+    let (left, right) = (as_nodes(a), as_nodes(b));
+
+    let mut gap_a: Vec<usize> = Vec::new();
+    let mut gap_b: Vec<usize> = Vec::new();
+    let flush = |gap_a: &mut Vec<usize>, gap_b: &mut Vec<usize>, out: &mut Vec<Change>| {
+        for pair in 0..gap_a.len().max(gap_b.len()) {
+            let before = gap_a
+                .get(pair)
+                .and_then(|&i| a.get(i))
+                .map(|s| s.text.clone());
+            let after = gap_b
+                .get(pair)
+                .and_then(|&j| b.get(j))
+                .map(|s| s.text.clone());
+            let kind = match (&before, &after) {
+                (Some(_), Some(_)) => ChangeKind::Changed,
+                (Some(_), None) => ChangeKind::Removed,
+                (None, Some(_)) => ChangeKind::Added,
+                (None, None) => continue,
+            };
+            out.push(Change {
+                path: path.to_string(),
+                kind,
+                // A template is control flow. Changing which branch a document
+                // takes changes what it means, always.
+                significance: Significance::Semantic,
+                before,
+                after,
+            });
+        }
+        gap_a.clear();
+        gap_b.clear();
+    };
+
+    for step in lcs_align(&left, &right) {
+        match step {
+            Step::Both(..) => flush(&mut gap_a, &mut gap_b, out),
+            Step::OnlyA(i) => gap_a.push(i),
+            Step::OnlyB(j) => gap_b.push(j),
+        }
+    }
+    flush(&mut gap_a, &mut gap_b, out);
 }
 
 /// Mappings: key identity decides, and key *order* is spelling.
