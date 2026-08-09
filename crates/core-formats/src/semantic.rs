@@ -461,10 +461,38 @@ fn value_from(
             kind::BLOCK_HEADER | kind::BLOCK_BODY => "block scalars are not modelled yet (M2)",
             kind::ANCHOR | kind::ALIAS => "anchors and aliases are not modelled yet (M2)",
             kind::TAG => "tags are not modelled yet (M2)",
-            kind::FLOW_PUNCT => "flow collections are not modelled yet (M2)",
             _ => continue,
         };
         return Err(unmodelled(reason));
+    }
+
+    // A flow collection is a whole value in one line's tokens: `{a: 1, b: 2}`
+    // or `[1, 2]`, nested arbitrarily. It gets its own small recursive parse
+    // rather than being folded into the block reader, because the two disagree
+    // about what ends a value — indentation there, a bracket here.
+    if tokens
+        .first()
+        .is_some_and(|token| token.kind() == kind::FLOW_PUNCT)
+    {
+        if !nested.is_empty() {
+            return Err(unmodelled(
+                "a flow collection spanning several lines is not modelled yet (M2)",
+            ));
+        }
+        let mut cursor = 0usize;
+        let node = flow_value(tokens, &mut cursor)?;
+        if cursor != tokens.len() {
+            return Err(unmodelled("trailing tokens after a flow collection"));
+        }
+        return Ok(node);
+    }
+
+    for token in tokens {
+        if token.kind() == kind::FLOW_PUNCT {
+            return Err(unmodelled(
+                "a flow collection that does not start the value is not modelled yet (M2)",
+            ));
+        }
     }
 
     match tokens.len() {
@@ -495,6 +523,98 @@ fn value_from(
         _ => Err(unmodelled(
             "a value of several tokens — an anchor, tag or flow collection — is not modelled yet (M2)",
         )),
+    }
+}
+
+/// Parse one flow value starting at `*cursor`, leaving it just past the value.
+///
+/// Recursive, and bounded by bracket nesting rather than by input length. A
+/// fuzzer will find a document that is nothing but ten thousand `[`, so the
+/// depth is capped and a document past the cap is refused rather than being
+/// allowed to take the stack with it — the same failure the deep-nesting test
+/// found in `core-cst`'s destructor at M1.
+fn flow_value(
+    tokens: &[&core_cst::GreenToken],
+    cursor: &mut usize,
+) -> Result<SemanticNode, Unmodelled> {
+    flow_value_at(tokens, cursor, 0)
+}
+
+/// How deep a flow collection may nest before we decline to model it.
+const FLOW_DEPTH_CAP: usize = 64;
+
+fn flow_value_at(
+    tokens: &[&core_cst::GreenToken],
+    cursor: &mut usize,
+    depth: usize,
+) -> Result<SemanticNode, Unmodelled> {
+    use crate::yaml::kind;
+
+    if depth > FLOW_DEPTH_CAP {
+        return Err(unmodelled(
+            "a flow collection nested past the depth this layer models",
+        ));
+    }
+    let token = tokens
+        .get(*cursor)
+        .ok_or_else(|| unmodelled("a flow collection ends before its value"))?;
+
+    if token.kind() != kind::FLOW_PUNCT {
+        *cursor += 1;
+        return Ok(SemanticNode::Scalar(resolve(token)));
+    }
+
+    let (close, is_mapping) = match token.text() {
+        b"[" => (b"]".as_slice(), false),
+        b"{" => (b"}".as_slice(), true),
+        _ => {
+            return Err(unmodelled(
+                "a flow collection opens with a bracket we do not model",
+            ));
+        }
+    };
+    *cursor += 1;
+
+    let mut entries: Vec<(String, SemanticNode)> = Vec::new();
+    let mut items: Vec<SemanticNode> = Vec::new();
+    loop {
+        let next = tokens
+            .get(*cursor)
+            .ok_or_else(|| unmodelled("a flow collection is never closed"))?;
+        if next.kind() == kind::FLOW_PUNCT && next.text() == close {
+            *cursor += 1;
+            break;
+        }
+        if next.kind() == kind::FLOW_PUNCT && next.text() == b"," {
+            *cursor += 1;
+            continue;
+        }
+
+        if is_mapping {
+            let key_token = tokens
+                .get(*cursor)
+                .ok_or_else(|| unmodelled("a flow mapping ends before its key"))?;
+            *cursor += 1;
+            let colon = tokens
+                .get(*cursor)
+                .ok_or_else(|| unmodelled("a flow mapping key has no value"))?;
+            if colon.kind() != kind::COLON {
+                return Err(unmodelled("a flow mapping entry without a colon"));
+            }
+            *cursor += 1;
+            entries.push((
+                resolve(key_token).value,
+                flow_value_at(tokens, cursor, depth + 1)?,
+            ));
+        } else {
+            items.push(flow_value_at(tokens, cursor, depth + 1)?);
+        }
+    }
+
+    if is_mapping {
+        Ok(SemanticNode::Mapping(entries))
+    } else {
+        Ok(SemanticNode::Sequence(items))
     }
 }
 
@@ -754,7 +874,7 @@ mod tests {
         // names it; dropping it would leave a view with fewer keys than the
         // document has, and a diff over that view would miss real edits.
         for (src, expected) in [
-            ("a: {x: 1}\n", "flow collections"),
+            ("a: {\n  x: 1}\n", "several lines"),
             ("a: &x 1\n", "anchors and aliases"),
             ("a: !!str 1\n", "tags"),
             ("---\na: 1\n", "multi-document"),
@@ -766,6 +886,64 @@ mod tests {
                 "for {src:?} expected a reason mentioning {expected:?}, got {reason:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_flow_mapping_is_a_mapping() {
+        let SemanticNode::Mapping(pairs) = yaml_view("selector: {app: web, tier: front}\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((_, SemanticNode::Mapping(inner))) = pairs.first() else {
+            panic!("expected a nested mapping");
+        };
+        let keys: Vec<&str> = inner.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["app", "tier"]);
+    }
+
+    #[test]
+    fn a_flow_sequence_is_a_sequence_and_empty_means_empty() {
+        let SemanticNode::Mapping(pairs) = yaml_view("ports: [80, 443]\nargs: []\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((_, SemanticNode::Sequence(ports))) = pairs.first() else {
+            panic!("expected a sequence");
+        };
+        assert_eq!(ports.len(), 2);
+        let Some((_, SemanticNode::Sequence(args))) = pairs.get(1) else {
+            panic!("expected a sequence");
+        };
+        assert!(args.is_empty(), "`[]` is an empty sequence, not a scalar");
+    }
+
+    #[test]
+    fn flow_and_block_spell_the_same_mapping() {
+        // The point of a semantic view: two spellings, one meaning. A diff
+        // between these reports no *semantic* change, which is correct.
+        assert!(yaml_view("a: {x: 1}\n").same_value(&yaml_view("a:\n  x: 1\n")));
+    }
+
+    #[test]
+    fn flow_collections_nest() {
+        let SemanticNode::Mapping(pairs) = yaml_view("a: {xs: [1, {y: 2}]}\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((_, SemanticNode::Mapping(inner))) = pairs.first() else {
+            panic!("expected a nested mapping");
+        };
+        let Some((_, SemanticNode::Sequence(xs))) = inner.first() else {
+            panic!("expected a nested sequence");
+        };
+        assert!(matches!(xs.get(1), Some(SemanticNode::Mapping(_))));
+    }
+
+    #[test]
+    fn a_flow_collection_nested_past_the_cap_is_refused_not_a_stack_overflow() {
+        // core-cst's destructor taught this lesson at M1: a fuzzer will send a
+        // document that is nothing but brackets, and recursion must decline
+        // rather than take the process with it.
+        let deep = format!("a: {}{}\n", "[".repeat(200), "]".repeat(200));
+        let reason = yaml_refusal(&deep);
+        assert!(reason.contains("depth"), "got {reason:?}");
     }
 
     #[test]

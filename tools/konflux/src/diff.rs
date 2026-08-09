@@ -660,14 +660,14 @@ mod tests {
     #[test]
     fn a_construct_without_a_semantic_view_is_refused_never_answered() {
         // ADR-012. An empty report would read as "these files agree", so a
-        // construct we cannot model must refuse. Flow collections are not
-        // modelled yet, and the two documents here genuinely differ — so a
-        // silent `[]` would be a wrong answer, not merely an unhelpful one.
-        let refusal = super::diff(&core_formats::Yaml, b"a: {x: 1}\n", b"a: {x: 2}\n")
-            .expect_err("flow collections are not modelled yet");
+        // construct we cannot model must refuse. Block scalars are not modelled
+        // yet, and the two documents here genuinely differ — so a silent `[]`
+        // would be a wrong answer, not merely an unhelpful one.
+        let refusal = super::diff(&core_formats::Yaml, b"a: |\n  one\n", b"a: |\n  two\n")
+            .expect_err("block scalars are not modelled yet");
         let rendered = refusal.to_string();
         assert!(rendered.contains("refused"), "{rendered}");
-        assert!(rendered.contains("flow"), "{rendered}");
+        assert!(rendered.contains("block scalars"), "{rendered}");
     }
 
     #[test]
