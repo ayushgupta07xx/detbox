@@ -73,10 +73,15 @@ separate work and nobody has done it.
    written. The Apache-2.0 text came from `apache.org` directly rather than
    from the corpus copy that carries Broadcom's header, or from memory; 11,358
    bytes, verified free of third-party notices.
-3. **Branch protection on `main`**, so `CODEOWNERS` has teeth. It would have
-   caught two real slips this session: a three-deep PR stack that merged into
-   base branches instead of `main`, and a local `main` left without an upstream
-   after the history rewrite.
+3. ~~**Branch protection**~~ — **enabled 2026-08-09.** 19 required checks (only
+   the ones that run on *every* PR; `miri`, `sanitizers` and
+   `benchmark-baseline` are path-filtered and requiring them would deadlock a
+   docs-only PR — verified against PR #13, which is docs-only and ran 19).
+   Force-pushes and deletions blocked. **`enforce_admins` is off on purpose:**
+   the trailer rewrite this session needed a force-push, and a solo maintainer
+   with no escape hatch just disables the protection permanently the first time
+   it blocks them. It still greys out the merge button when checks are red,
+   which is the accident it exists to catch.
 
 **ADR-009 through ADR-013 accepted 2026-08-09.** ADR-010 was accepted with its
 reasoning as drafted — assembled from the plan's own arguments rather than from
@@ -275,7 +280,8 @@ blocking today against the weakest *true* statement available, and arm here:
 - [x] **D4** — final licence, settled 2026-08-09. `MIT OR Apache-2.0`, both
       files written; the Apache text fetched from `apache.org`, not copied from
       the corpus or reproduced from memory.
-- [!] **Enable branch protection on `main`** so `CODEOWNERS` has teeth.
+- [x] **Branch protection on `main`** — enabled 2026-08-09; 19 required checks,
+      force-push and deletion blocked, admin enforcement off as an escape hatch.
 - [ ] r/kubernetes post — §11 names three venues; only two were requested.
       Say the word and I will draft it.
 
