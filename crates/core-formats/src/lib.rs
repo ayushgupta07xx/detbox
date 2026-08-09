@@ -209,8 +209,7 @@ pub trait Format {
     }
 }
 
-/// YAML. konflux M1 for parse/serialize; its semantic view is M2 and does not
-/// exist yet, so [`Format::semantic_view`]'s declining default stands.
+/// YAML. konflux M1 for parse/serialize, M2 for the semantic view.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Yaml;
 
@@ -225,6 +224,10 @@ impl Format for Yaml {
 
     fn parse(&self, input: &[u8]) -> Result<Cst, ParseReport> {
         yaml::parse(input)
+    }
+
+    fn semantic_view(&self, cst: &Cst) -> Result<SemanticNode, Unmodelled> {
+        semantic::yaml_view(cst)
     }
 }
 

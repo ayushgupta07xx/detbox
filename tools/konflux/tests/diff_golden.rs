@@ -23,26 +23,6 @@ const EXPECTED_CASES: usize = 10;
 /// `900-identical` control — see the suite README.
 const CASES_A_NULL_DIFF_FAILS: usize = 9;
 
-/// Cases the implementation cannot yet produce. **Ratchets down only.**
-///
-/// The suite is written before the diff exists (§8), so it is red — and a
-/// permanently-red gate is the one thing worse than no gate, because it trains
-/// everyone to ignore the colour. ADR-003 already answered this for Phase 0's
-/// gates: wire them blocking *today* against the weakest true statement
-/// available, and publish the schedule on which they arm.
-///
-/// The weakest true statement here is "eight of these ten cases are unproven."
-/// It is recorded, it is checked exactly, and M2's implementation drives it to
-/// zero. When it reaches zero this constant and its assertion come out, and the
-/// suite becomes an ordinary golden gate.
-///
-/// **9 → 8** when JSON's semantic view landed: both JSON cases now pass. The
-/// eight that remain are every YAML case, which `diff` refuses rather than
-/// answering, and they fall together when YAML's `semantic_view` lands. That
-/// includes `900-identical` — konflux cannot currently say even "no changes"
-/// about a YAML file, and saying it anyway is the thing ADR-012 forbids.
-const UNIMPLEMENTED_CASES: usize = 8;
-
 fn suite() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/diff")
 }
@@ -83,34 +63,11 @@ fn structural_diff_matches_the_golden_suite() {
         report.total()
     );
 
-    let failed = report.failures.len();
-    if failed == UNIMPLEMENTED_CASES {
-        println!(
-            "diff golden suite: {}/{EXPECTED_CASES} passing, {failed} unproven \
-             (recorded — konflux M2 has no diff implementation yet)",
-            report.passed
-        );
-        return;
-    }
-
-    if failed > UNIMPLEMENTED_CASES {
-        // Strictly worse than recorded: something that used to hold stopped.
-        report.assert_ok();
-    }
-
-    // Strictly better than recorded, which is the good direction and still has
-    // to be a reviewed change: the count of unproven cases is evidence.
-    panic!(
-        "\nGOOD NEWS, AND A CONSTANT TO LOWER\n\
-         \n\
-         {failed} of {EXPECTED_CASES} diff golden cases now fail, down from the \
-         recorded {UNIMPLEMENTED_CASES}.\n\
-         \n\
-         Lower UNIMPLEMENTED_CASES to {failed} in this same PR. Tightening a\n\
-         threshold is free and needs no approval (§8); it is only loosening that\n\
-         needs sign-off. When it reaches 0, delete the constant and this branch\n\
-         and let `report.assert_ok()` be the whole test.\n"
-    );
+    // ADR-011 recorded `UNIMPLEMENTED_CASES` as the weakest true statement
+    // available while the diff did not exist, and said the constant comes out
+    // when it reaches zero. It reached zero, so this is now an ordinary golden
+    // gate: every case must pass, and any regression is simply red.
+    report.assert_ok();
 }
 
 /// The suite must not be satisfiable by doing nothing.

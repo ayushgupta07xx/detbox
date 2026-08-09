@@ -1,10 +1,10 @@
 //! Structural diff — konflux **M2**.
 //!
-//! **JSON is implemented; YAML is not.** The golden suite (ADR-011) was written
-//! and merged first, per §8, and this is the implementation catching up to it.
-//! The algorithm here is format-agnostic — it walks [`SemanticNode`], not a
-//! CST — so YAML needs only its `semantic_view`, which is the remaining and
-//! larger half of M2.
+//! **Both formats are implemented.** The golden suite (ADR-011) was written
+//! and merged first, per §8, and the implementation caught up to it: 10/10.
+//! The algorithm is format-agnostic — it walks [`SemanticNode`], not a CST — so
+//! a new format needs only a `semantic_view`. What it does not yet model, it
+//! refuses; `cargo xtask semantic-coverage` measures how often (ADR-013).
 //!
 //! For a format with no view, [`diff`] **refuses**. It does not return an empty
 //! report: empty is indistinguishable from "these files agree", and for a merge
@@ -337,37 +337,68 @@ fn walk_sequence(path: &str, a: &[SemanticNode], b: &[SemanticNode], out: &mut V
     // Otherwise align on the longest common subsequence, so inserting one item
     // mid-list is one `added` rather than a cascade of positional "changes" —
     // which is exactly what a line diff produces and why it is unreadable.
+    //
+    // LCS matches on equality, so an item that was *edited* matches nothing and
+    // falls out as a removal beside an addition. That is technically true and
+    // practically useless: it throws away the path to what actually changed,
+    // which is the entire product. So each run of unmatched items is paired up
+    // positionally and recursed into — a modified container is one edit, not
+    // two — and only the leftovers past the shorter side are a real add or
+    // remove. This is the cheap end of the Chawathe/GumTree family; §4.1 wants
+    // similarity-based matching here eventually, and this is the part of it
+    // that the golden suite can currently justify.
+    let mut gap_a: Vec<usize> = Vec::new();
+    let mut gap_b: Vec<usize> = Vec::new();
+    let flush = |gap_a: &mut Vec<usize>, gap_b: &mut Vec<usize>, out: &mut Vec<Change>| {
+        for pair in 0..gap_a.len().max(gap_b.len()) {
+            match (gap_a.get(pair), gap_b.get(pair)) {
+                (Some(&i), Some(&j)) => {
+                    if let (Some(x), Some(y)) = (a.get(i), b.get(j)) {
+                        walk(&join(path, &j.to_string()), x, y, out);
+                    }
+                }
+                (Some(&i), None) => {
+                    if let Some(x) = a.get(i) {
+                        out.push(Change {
+                            path: join(path, &i.to_string()),
+                            kind: ChangeKind::Removed,
+                            significance: Significance::Semantic,
+                            before: Some(x.text()),
+                            after: None,
+                        });
+                    }
+                }
+                (None, Some(&j)) => {
+                    if let Some(y) = b.get(j) {
+                        out.push(Change {
+                            path: join(path, &j.to_string()),
+                            kind: ChangeKind::Added,
+                            significance: Significance::Semantic,
+                            before: None,
+                            after: Some(y.text()),
+                        });
+                    }
+                }
+                (None, None) => {}
+            }
+        }
+        gap_a.clear();
+        gap_b.clear();
+    };
+
     for step in lcs_align(a, b) {
         match step {
             Step::Both(i, j) => {
+                flush(&mut gap_a, &mut gap_b, out);
                 if let (Some(x), Some(y)) = (a.get(i), b.get(j)) {
                     walk(&join(path, &j.to_string()), x, y, out);
                 }
             }
-            Step::OnlyA(i) => {
-                if let Some(x) = a.get(i) {
-                    out.push(Change {
-                        path: join(path, &i.to_string()),
-                        kind: ChangeKind::Removed,
-                        significance: Significance::Semantic,
-                        before: Some(x.text()),
-                        after: None,
-                    });
-                }
-            }
-            Step::OnlyB(j) => {
-                if let Some(y) = b.get(j) {
-                    out.push(Change {
-                        path: join(path, &j.to_string()),
-                        kind: ChangeKind::Added,
-                        significance: Significance::Semantic,
-                        before: None,
-                        after: Some(y.text()),
-                    });
-                }
-            }
+            Step::OnlyA(i) => gap_a.push(i),
+            Step::OnlyB(j) => gap_b.push(j),
         }
     }
+    flush(&mut gap_a, &mut gap_b, out);
 }
 
 /// One position in an alignment.
@@ -627,13 +658,30 @@ mod tests {
     }
 
     #[test]
-    fn a_format_without_a_semantic_view_is_refused_never_answered() {
-        // ADR-012. An empty report would read as "these files agree".
-        let refusal = super::diff(&core_formats::Yaml, b"a: 1\n", b"a: 2\n")
-            .expect_err("yaml has no semantic view yet");
+    fn a_construct_without_a_semantic_view_is_refused_never_answered() {
+        // ADR-012. An empty report would read as "these files agree", so a
+        // construct we cannot model must refuse. Flow collections are not
+        // modelled yet, and the two documents here genuinely differ — so a
+        // silent `[]` would be a wrong answer, not merely an unhelpful one.
+        let refusal = super::diff(&core_formats::Yaml, b"a: {x: 1}\n", b"a: {x: 2}\n")
+            .expect_err("flow collections are not modelled yet");
         let rendered = refusal.to_string();
         assert!(rendered.contains("refused"), "{rendered}");
-        assert!(rendered.contains("yaml"), "{rendered}");
+        assert!(rendered.contains("flow"), "{rendered}");
+    }
+
+    #[test]
+    fn yaml_and_json_agree_on_the_same_document() {
+        // The algorithm is format-agnostic, so the same edit expressed in each
+        // format must produce the same paths and the same significance. If
+        // these ever diverge it is a semantic_view bug, not a diff bug.
+        let yaml = super::diff(&core_formats::Yaml, b"a:\n  b: 1\n", b"a:\n  b: 2\n")
+            .expect("yaml diffs")
+            .to_json();
+        let json = super::diff(&Json, br#"{"a":{"b":1}}"#, br#"{"a":{"b":2}}"#)
+            .expect("json diffs")
+            .to_json();
+        assert_eq!(yaml, json);
     }
 
     #[test]

@@ -12,6 +12,7 @@
 //! cargo xtask corpus-verify            offline validation of corpora/sources/*.sources
 //! cargo xtask corpus-survey            which YAML constructs the corpus contains
 //! cargo xtask corpus-k1                K1 over every corpus file (konflux P1)
+//! cargo xtask semantic-coverage       how much corpus semantic_view models (M2)
 //! cargo xtask conformance-report       the published pass rates (konflux P4)
 //! cargo xtask parse-digest             K3 digest of parse+serialize per golden case
 //! cargo xtask alloc-profile            deterministic allocation counts (the perf gate)
@@ -28,6 +29,7 @@ mod fuzz_hours;
 mod k1;
 mod parse_digest;
 mod report;
+mod semantic_coverage;
 mod sha256;
 mod survey;
 
@@ -53,6 +55,10 @@ fn main() -> ExitCode {
         "corpus-verify" => cmd_corpus_verify(),
         "corpus-survey" => cmd_corpus_survey(),
         "corpus-k1" => k1::run(&workspace_root()),
+        "semantic-coverage" => match rest.first() {
+            Some(path) => semantic_coverage::explain(Path::new(path)),
+            None => semantic_coverage::run(&workspace_root()),
+        },
         "conformance-report" => cmd_conformance_report(rest),
         "parse-digest" => parse_digest::run(&workspace_root()),
         "alloc-profile" => alloc_profile::run(&workspace_root()),
@@ -89,6 +95,7 @@ fn usage() {
          \x20 corpus-verify                       validate corpora/sources/*.sources (offline)\n\
          \x20 corpus-survey                       which YAML constructs the corpus contains\n\
          \x20 corpus-k1                           K1 over every corpus file (konflux P1)\n\
+         \x20 semantic-coverage                   corpus coverage of semantic_view (M2)\n\
          \x20 conformance-report [--write]        published pass rates (konflux P4)\n\
          \x20 parse-digest                        K3 digest of parse+serialize per golden case\n\
          \x20 alloc-profile                       deterministic allocation counts (the perf gate)\n\
