@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/nodeSelector/kubernetes.io~1os",
+      "kind": "changed",
+      "significance": "semantic",
+      "before": "linux",
+      "after": "windows"
+    }
+  ]
+}

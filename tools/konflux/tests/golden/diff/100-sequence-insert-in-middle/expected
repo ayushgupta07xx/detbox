@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/items/1",
+      "kind": "added",
+      "significance": "semantic",
+      "after": "beta"
+    }
+  ]
+}
