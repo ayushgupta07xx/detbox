@@ -261,8 +261,25 @@ blocking today against the weakest *true* statement available, and arm here:
       closed by decision rather than by measurement. The drafts stay: asked
       before there is anything to show, the same question still tells us which
       incumbent is the real bar (§14). Now pre-launch work, not a blocker.
-- [!] **D1** — umbrella brand + `<b>` binary name. Blocks the multicall binary
-      and the crates.io/org/domain reservation.
+- [x] **D1 — DECIDED 2026-08-09: the brand is `inviolate`, the binary `invio`.**
+      → **ADR-015**. Discharges ADR-007's freeze.
+      - Two better-sounding candidates were rejected by reasoning, not
+        availability: **`hallmark`** (perfect meaning — the assay office's
+        purity stamp — but a major defended trademark) and **`unerring`** (free
+        everywhere, means §0 priority 1 exactly, but Appendix C bans
+        "unescapable"-class claims and a brand may not make one either).
+      - **`lossproof` was my first pick and was wrong.** It names one of §0's
+        three pillars and covers five of nine products — `cage` and `coverify`
+        have nothing to do with loss — and it sits two letters from the existing
+        product `lockproof`. Caught by Ayush, not by me.
+      - crates.io and npm free; `inviolate.dev/.io/.app/.sh/.rs` unregistered
+        (RDAP, whois and DNS each checked, because the first pass was wrong
+        twice). GitHub `inviolate` is taken, `inviolate-dev` free — and that is
+        not a blocker: Astral's own org is `astral-sh`.
+      - Binary `invio` because `inv` and `vio` are taken on crates.io, and `inv`
+        collides with the binary Python's `invoke` installs.
+      - **Still Ayush's, and neither is code:** reserving the org and domain,
+        and a **trademark search** — the one §16 criterion still unverified.
 - [!] **D2** — Tauri confirmation (needed before Phase 3, bigsheet's grid).
 - [x] **D3 — DECIDED 2026-08-09: konflux is the flagship.** M2 onward is
       unblocked. → **ADR-010**.

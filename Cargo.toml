@@ -1,9 +1,10 @@
 ##
 ## Workspace root — virtual manifest.
 ##
-## NOTE (Decision D1, MASTER_PLAN §16): the umbrella brand and the multicall
-## binary name `<b>` are NOT chosen. No crate here is named for the brand, and
-## no multicall binary crate exists yet. Both land in the same PR as D1.
+## Decision D1 is made (ADR-015): the brand is `inviolate`, the multicall binary
+## is `invio`. The binary crate still does not exist — §11 puts the install
+## one-liner at konflux M4, and a crate that exists only to hold a name is the
+## placeholder ADR-007 was written to prevent.
 ##
 [workspace]
 resolver = "3"

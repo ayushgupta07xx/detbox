@@ -1,12 +1,14 @@
-# The Deterministic Toolbox
+# inviolate
 
 > Everything we ship is provably correct, every run.
 
-**Status: Phase 0 — scaffold.** No product has shipped. Nothing here claims to
-work yet, and this README will not claim otherwise until a gate says so.
+**Status: konflux M2.** No product has shipped. Nothing here claims to work yet,
+and this README will not claim otherwise until a gate says so.
 
-The brand name and the multicall binary name are **not chosen** (Decision D1,
-MASTER_PLAN §16). The repository directory name is a working name, not a brand.
+The brand is **inviolate** and the multicall binary will be `invio` — Decision
+D1, made 2026-08-09 (ADR-015). *Inviolate:* intact, nothing violated. It is a
+claim about the artifact, not about us. The binary itself does not exist yet; it
+lands when konflux M4 needs something to install.
 
 ---
 
