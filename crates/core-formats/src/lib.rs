@@ -54,7 +54,10 @@
 //! conformance oracles remain red by design.
 
 pub mod json;
+pub mod semantic;
 pub mod yaml;
+
+pub use semantic::{Scalar, SemanticNode, Unmodelled};
 
 use core_cst::{Cst, Span};
 
@@ -182,9 +185,32 @@ pub trait Format {
     fn serialize(&self, cst: &Cst) -> Vec<u8> {
         cst.serialize()
     }
+
+    /// The typed layer diff, merge and query reason over (§3.2).
+    ///
+    /// §3.2 sketches this as total. It cannot be: YAML's concrete tree is a
+    /// flat list of lines, so a view has to be *inferred*, and that inference
+    /// is M2 work. The default therefore declines.
+    ///
+    /// **Declining is the whole point.** A format with no view must say so, not
+    /// return an empty one — an empty view lets konflux report "no changes" for
+    /// a document it never understood, which is the silently-wrong failure §0
+    /// ranks first (ADR-012).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Unmodelled`] when this format cannot model the input.
+    fn semantic_view(&self, cst: &Cst) -> Result<SemanticNode, Unmodelled> {
+        let _ = cst;
+        Err(Unmodelled {
+            format: self.name(),
+            reason: "no semantic view is implemented for this format yet",
+        })
+    }
 }
 
-/// YAML. konflux M1.
+/// YAML. konflux M1 for parse/serialize; its semantic view is M2 and does not
+/// exist yet, so [`Format::semantic_view`]'s declining default stands.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Yaml;
 
@@ -217,6 +243,10 @@ impl Format for Json {
 
     fn parse(&self, input: &[u8]) -> Result<Cst, ParseReport> {
         json::parse(input)
+    }
+
+    fn semantic_view(&self, cst: &Cst) -> Result<SemanticNode, Unmodelled> {
+        semantic::json_view(cst)
     }
 }
 
