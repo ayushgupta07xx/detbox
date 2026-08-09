@@ -36,9 +36,20 @@ as structured, span-anchored blocks.
 Mergiraf/diff3 win), 60-second screencast, README per §12.
 
 ## Current milestone
-**Phase 0 — scaffold.** M1 does not begin until Ayush accepts Phase 0. M1 is
-blocked on ADR-001 (CST representation), which follows a 2-day spike.
+**M2 — structural diff.** M1 is finished: `core-cst` per ADR-001, YAML and JSON
+parse/serialize, K1 green on 1,000 corpus files, conformance published
+(ADR-009). The two M1 items still open are not M2's to close — P1's 72 fuzz
+hours accrue on the clock, and the yaml reject-rate needs the block/flow context
+that `semantic_view` brings *here*, at M2.
+
+M2 starts at the oracle: a diff golden suite of hand-built cases where
+line-based diff is wrong and structural diff is right. Confirm red first.
 
 ## Status of the flagship claim
-**Decision D3, Ayush's alone.** Confirmed or overturned by the Phase 0
-validation read (§11). Do not assert "flagship" in any public artifact until D3.
+**Decision D3 is made: konflux is the flagship** (2026-08-09, ADR-010).
+
+It was decided **without** the §11 validation read — the posts in
+`docs/validation/` were never sent. So "flagship" is a sequencing decision about
+what gets built first, and it is **not** a claim that demand was measured.
+Nothing public may imply otherwise, and all public wording is Ayush's regardless
+(§16). The claim comes due at §14's kill rule after Launch 1.
