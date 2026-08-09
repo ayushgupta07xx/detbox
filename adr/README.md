@@ -37,3 +37,4 @@ because 001 was held open for it.
 | [009](ADR-009-publishing-conformance-rates.md) | Conformance rates are published as a generated file CI regenerates and byte-compares | proposed |
 | [010](ADR-010-flagship-is-konflux.md) | konflux is the flagship (D3), decided without the validation signal | proposed |
 | [011](ADR-011-diff-golden-contract.md) | The diff golden is the `--json` output, and it lands red-but-recorded | proposed |
+| [012](ADR-012-refusal-is-a-result.md) | A format with no semantic view is refused, never answered | proposed |

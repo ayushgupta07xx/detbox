@@ -50,4 +50,4 @@
 
 pub mod diff;
 
-pub use diff::{Change, ChangeKind, DiffReport, Significance, diff};
+pub use diff::{Change, ChangeKind, DiffError, DiffReport, Significance, diff};

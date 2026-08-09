@@ -31,11 +31,17 @@ const CASES_A_NULL_DIFF_FAILS: usize = 9;
 /// gates: wire them blocking *today* against the weakest true statement
 /// available, and publish the schedule on which they arm.
 ///
-/// The weakest true statement here is "nine of these ten cases are unproven."
+/// The weakest true statement here is "eight of these ten cases are unproven."
 /// It is recorded, it is checked exactly, and M2's implementation drives it to
 /// zero. When it reaches zero this constant and its assertion come out, and the
 /// suite becomes an ordinary golden gate.
-const UNIMPLEMENTED_CASES: usize = 9;
+///
+/// **9 → 8** when JSON's semantic view landed: both JSON cases now pass. The
+/// eight that remain are every YAML case, which `diff` refuses rather than
+/// answering, and they fall together when YAML's `semantic_view` lands. That
+/// includes `900-identical` — konflux cannot currently say even "no changes"
+/// about a YAML file, and saying it anyway is the thing ADR-012 forbids.
+const UNIMPLEMENTED_CASES: usize = 8;
 
 fn suite() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/diff")
@@ -55,15 +61,14 @@ fn diff_json(pair: &Pair) -> Vec<u8> {
              is an unrunnable case, not a pending one."
         ),
     };
-    report
-        .unwrap_or_else(|e| {
-            panic!(
-                "a golden diff case does not parse, which is a broken case rather \
-                 than a failing one: {e:?}"
-            )
-        })
-        .to_json()
-        .into_bytes()
+    match report {
+        Ok(diff) => diff.to_json().into_bytes(),
+        // A refusal is a *result*, not a broken case, so it flows into the
+        // byte-compare and shows up as an ordinary failure with the reason
+        // printed. Panicking here would abort the suite on the first YAML case
+        // and hide the eight behind it (ADR-012).
+        Err(refusal) => format!("{refusal}\n").into_bytes(),
+    }
 }
 
 #[test]
