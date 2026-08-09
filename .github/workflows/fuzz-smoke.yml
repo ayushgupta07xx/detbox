@@ -34,7 +34,7 @@ jobs:
         # One target per format per operation (§2).
         target: [yaml_roundtrip, json_roundtrip]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: ". -> target\nfuzz -> fuzz/target" }
