@@ -458,12 +458,43 @@ fn value_from(
     // the user which line to look at and what we will not do with it.
     for token in tokens {
         let reason = match token.kind() {
-            kind::BLOCK_HEADER | kind::BLOCK_BODY => "block scalars are not modelled yet (M2)",
             kind::ANCHOR | kind::ALIAS => "anchors and aliases are not modelled yet (M2)",
             kind::TAG => "tags are not modelled yet (M2)",
             _ => continue,
         };
         return Err(unmodelled(reason));
+    }
+
+    // A block scalar is its header and its body, and nothing else can be on the
+    // line. Its VALUE is deliberately its source text rather than the string
+    // YAML would fold it into: implementing indentation stripping and chomping
+    // correctly is a real piece of spec work, and getting it subtly wrong would
+    // make two different strings compare equal — a diff that misses an edit.
+    //
+    // The cost is over-reporting: re-indenting a block body, or switching `|`
+    // for `>`, reads as a semantic change when the folded string is unchanged.
+    // That is the same trade already taken on numbers, and in the same
+    // direction — noisy is recoverable, silent is not. ADR-013 amendment 1.
+    if tokens
+        .first()
+        .is_some_and(|token| token.kind() == kind::BLOCK_HEADER)
+    {
+        if !nested.is_empty() {
+            return Err(unmodelled(
+                "a block scalar with further nested lines is not modelled yet (M2)",
+            ));
+        }
+        let mut text = String::new();
+        for token in tokens {
+            match token.kind() {
+                kind::BLOCK_HEADER | kind::BLOCK_BODY => {
+                    text.push_str(&String::from_utf8_lossy(token.text()));
+                }
+                _ => return Err(unmodelled("a block scalar sharing its line with a value")),
+            }
+        }
+        let value = text.clone();
+        return Ok(SemanticNode::Scalar(Scalar { text, value }));
     }
 
     // A flow collection is a whole value in one line's tokens: `{a: 1, b: 2}`
@@ -878,7 +909,6 @@ mod tests {
             ("a: &x 1\n", "anchors and aliases"),
             ("a: !!str 1\n", "tags"),
             ("---\na: 1\n", "multi-document"),
-            ("a: |\n  text\n", "block scalars"),
         ] {
             let reason = yaml_refusal(src);
             assert!(
@@ -944,6 +974,53 @@ mod tests {
         let deep = format!("a: {}{}\n", "[".repeat(200), "]".repeat(200));
         let reason = yaml_refusal(&deep);
         assert!(reason.contains("depth"), "got {reason:?}");
+    }
+
+    #[test]
+    fn a_block_scalar_is_a_scalar_carrying_its_own_source() {
+        let SemanticNode::Mapping(pairs) = yaml_view("script: |\n  echo one\nshell: sh\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((key, SemanticNode::Scalar(scalar))) = pairs.first() else {
+            panic!("expected a scalar");
+        };
+        assert_eq!(key, "script");
+        assert_eq!(scalar.text, "|\n  echo one");
+        assert_eq!(
+            scalar.value, scalar.text,
+            "block scalars are deliberately not folded — ADR-013 amendment 1"
+        );
+    }
+
+    #[test]
+    fn block_style_is_not_folded_so_a_restyle_reads_as_semantic() {
+        // Documented over-reporting. `|` and `>` fold differently, and deciding
+        // they agree would need the folding rules implemented correctly; a
+        // subtle error there makes two different strings compare equal, which
+        // is a diff that misses an edit. Noisy is recoverable, silent is not.
+        assert!(!yaml_view("a: |\n  x\nb: 1\n").same_value(&yaml_view("a: >\n  x\nb: 1\n")));
+    }
+
+    #[test]
+    fn a_block_scalar_at_end_of_file_owns_the_final_newline() {
+        // A lexer wart, pinned rather than papered over: the body absorbs the
+        // trailing newline only when nothing follows the block. Same logical
+        // content, two different node texts — so comparing a block at end of
+        // file against the same content mid-file over-reports. Safe direction,
+        // and now it is written down instead of surprising someone at M3.
+        let SemanticNode::Mapping(last) = yaml_view("script: |\n  echo one\n") else {
+            panic!("expected a mapping");
+        };
+        let SemanticNode::Mapping(mid) = yaml_view("script: |\n  echo one\nshell: sh\n") else {
+            panic!("expected a mapping");
+        };
+        let (Some((_, SemanticNode::Scalar(at_end))), Some((_, SemanticNode::Scalar(in_mid)))) =
+            (last.first(), mid.first())
+        else {
+            panic!("expected scalars");
+        };
+        assert_eq!(at_end.text, "|\n  echo one\n");
+        assert_eq!(in_mid.text, "|\n  echo one");
     }
 
     #[test]

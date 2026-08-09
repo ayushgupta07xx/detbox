@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/script",
+      "kind": "changed",
+      "significance": "semantic",
+      "before": "|\n  echo one",
+      "after": "|\n  echo two"
+    }
+  ]
+}

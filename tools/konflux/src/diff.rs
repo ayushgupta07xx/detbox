@@ -660,14 +660,23 @@ mod tests {
     #[test]
     fn a_construct_without_a_semantic_view_is_refused_never_answered() {
         // ADR-012. An empty report would read as "these files agree", so a
-        // construct we cannot model must refuse. Block scalars are not modelled
-        // yet, and the two documents here genuinely differ — so a silent `[]`
-        // would be a wrong answer, not merely an unhelpful one.
-        let refusal = super::diff(&core_formats::Yaml, b"a: |\n  one\n", b"a: |\n  two\n")
-            .expect_err("block scalars are not modelled yet");
+        // construct we cannot model must refuse.
+        //
+        // Anchored on the flow depth cap rather than on a missing feature. This
+        // test has been re-pointed three times as flow collections and block
+        // scalars landed, and a witness that keeps expiring eventually gets
+        // deleted instead of fixed. The cap is a deliberate, permanent guard,
+        // so it will still refuse when every YAML feature is modelled.
+        let deep = |leaf: &str| format!("a: {}{leaf}{}\n", "[".repeat(200), "]".repeat(200));
+        let refusal = super::diff(
+            &core_formats::Yaml,
+            deep("1").as_bytes(),
+            deep("2").as_bytes(),
+        )
+        .expect_err("nesting past the cap is refused by design");
         let rendered = refusal.to_string();
         assert!(rendered.contains("refused"), "{rendered}");
-        assert!(rendered.contains("block scalars"), "{rendered}");
+        assert!(rendered.contains("depth"), "{rendered}");
     }
 
     #[test]
