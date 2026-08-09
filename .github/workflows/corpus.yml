@@ -42,6 +42,12 @@ jobs:
           [ "$n" -eq 1250 ] || { echo "::error::expected 1250 files, got $n"; exit 1; }
       - name: K1 over every corpus file (konflux P1)
         run: cargo run --release -p xtask -- corpus-k1
+      # Reported, not gated (ADR-013). This number moves on most M2 commits, and
+      # a threshold that changes every PR teaches everyone to edit thresholds —
+      # the same reason the fuzz-hours ledger stays out of the blocking set. It
+      # becomes a ratchet when M2 ends and the figure stops moving weekly.
+      - name: How much of the corpus semantic_view models (konflux M2)
+        run: cargo run --release -p xtask -- semantic-coverage
       - name: Nothing fetched may be committable
         run: |
           set -euo pipefail

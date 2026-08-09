@@ -245,6 +245,358 @@ fn unescape(literal: &str) -> String {
     out
 }
 
+// --- YAML -------------------------------------------------------------------
+//
+// YAML's concrete tree is `STREAM → LINE*`, where a LINE owns its own tokens and
+// nests the more-indented LINEs beneath it. So the shape is already there; what
+// is missing is *meaning* — which lines are mapping entries, which are sequence
+// items, and which are neither.
+//
+// The rule for "neither" is the load-bearing one. A line this code cannot
+// classify makes the whole document [`Unmodelled`], rather than being skipped.
+// Skipping would produce a view with fewer keys than the document has, and a
+// diff over that view would report "no changes" for an edit inside the part we
+// dropped — silently wrong, from the layer whose entire job is to not be
+// (ADR-012).
+//
+// Blank and comment-only lines are the one exception, and they are not an
+// exception to that rule: they carry no *semantic* content, so a view without
+// them is complete. Their bytes are still owned by the CST, where K1 already
+// proves they survive.
+
+/// What a single line means.
+enum Line<'a> {
+    /// `key: value`, where the value may be inline, nested, or absent.
+    Entry {
+        /// Resolved key text.
+        key: String,
+        /// Significant tokens after the colon.
+        value: Vec<&'a core_cst::GreenToken>,
+    },
+    /// `- ...`
+    Item {
+        /// Significant tokens after the dash.
+        rest: Vec<&'a core_cst::GreenToken>,
+    },
+    /// Blank, or nothing but a comment.
+    Blank,
+}
+
+/// Build the semantic view of a YAML tree.
+///
+/// # Errors
+///
+/// Returns [`Unmodelled`] for anything this layer does not model yet: multiple
+/// documents, flow collections, anchors and aliases, tags, block scalars, and
+/// Go templates. Each is a refusal rather than a guess.
+pub(crate) fn yaml_view(cst: &Cst) -> Result<SemanticNode, Unmodelled> {
+    let lines = child_lines(cst.root());
+    node_from_lines(&lines)
+}
+
+/// The `LINE` children of a node that carry meaning, in source order.
+///
+/// Comment-only and blank lines are dropped here rather than later, because of
+/// where the concrete tree puts them: a line with no indentation of its own
+/// attaches to the innermost open line, so the comment in
+///
+/// ```yaml
+/// global:
+///   imageRegistry: ""
+///   ## E.g. imagePullSecrets:
+/// ```
+///
+/// becomes a *child of `imageRegistry`*, not a sibling. Reading that literally
+/// makes a scalar look like a container and refuses the document. It is the
+/// single most common shape in the corpus — Helm values files are more comment
+/// than value — and dropping these lines costs nothing, because they carry no
+/// semantic content and K1 already proves their bytes survive.
+fn child_lines(node: &GreenNode) -> Vec<&GreenNode> {
+    node.children()
+        .iter()
+        .filter_map(|child| match child {
+            GreenChild::Node(inner) if inner.kind() == crate::yaml::kind::LINE => {
+                Some(inner.as_ref())
+            }
+            _ => None,
+        })
+        .filter(|line| !is_empty_subtree(line))
+        .collect()
+}
+
+/// A line with nothing to say and no descendants that do.
+///
+/// Not recursive on purpose: a comment attaches to the innermost *indented*
+/// line, never to another comment, so this nests one level and a loop would be
+/// guarding against a shape the lexer cannot produce.
+fn is_empty_subtree(line: &GreenNode) -> bool {
+    let has_tokens = line.children().iter().any(|child| match child {
+        GreenChild::Token(token) => !is_layout(token.kind()),
+        GreenChild::Node(_) => false,
+    });
+    if has_tokens {
+        return false;
+    }
+    !line.children().iter().any(|child| match child {
+        GreenChild::Node(inner) => inner.kind() == crate::yaml::kind::LINE,
+        GreenChild::Token(_) => false,
+    })
+}
+
+/// Layout tokens: present in the bytes, absent from the meaning.
+fn is_layout(kind: core_cst::SyntaxKind) -> bool {
+    use crate::yaml::kind;
+    matches!(
+        kind,
+        kind::INDENT | kind::SPACE | kind::NEWLINE | kind::COMMENT
+    )
+}
+
+fn unmodelled(reason: &'static str) -> Unmodelled {
+    Unmodelled {
+        format: "yaml",
+        reason,
+    }
+}
+
+/// Classify one line from its own tokens, ignoring its nested lines.
+fn classify(line: &GreenNode) -> Result<Line<'_>, Unmodelled> {
+    use crate::yaml::kind;
+
+    let tokens: Vec<&core_cst::GreenToken> = line
+        .children()
+        .iter()
+        .filter_map(|child| match child {
+            GreenChild::Token(token) if !is_layout(token.kind()) => Some(token.as_ref()),
+            _ => None,
+        })
+        .collect();
+
+    let Some(first) = tokens.first() else {
+        return Ok(Line::Blank);
+    };
+
+    match first.kind() {
+        kind::DASH => Ok(Line::Item {
+            rest: tokens.get(1..).unwrap_or_default().to_vec(),
+        }),
+        // Everything below is a construct whose meaning this layer does not
+        // model. Naming them individually costs nothing and makes the refusal
+        // message tell the user what to do about it.
+        kind::DOC_START | kind::DOC_END => Err(unmodelled(
+            "multi-document streams are not modelled yet (M2)",
+        )),
+        kind::DIRECTIVE => Err(unmodelled("directives are not modelled yet (M2)")),
+        kind::ANCHOR | kind::ALIAS => {
+            Err(unmodelled("anchors and aliases are not modelled yet (M2)"))
+        }
+        kind::TAG => Err(unmodelled("tags are not modelled yet (M2)")),
+        kind::FLOW_PUNCT => Err(unmodelled("flow collections are not modelled yet (M2)")),
+        kind::BLOCK_HEADER | kind::BLOCK_BODY => {
+            Err(unmodelled("block scalars are not modelled yet (M2)"))
+        }
+        _ => {
+            let colon = tokens
+                .iter()
+                .position(|token| token.kind() == kind::COLON)
+                .ok_or_else(|| {
+                    unmodelled("a line that is neither a mapping entry nor a sequence item")
+                })?;
+            let key_tokens = tokens.get(..colon).unwrap_or_default();
+            if key_tokens.len() != 1 {
+                return Err(unmodelled(
+                    "compound mapping keys are not modelled yet (M2)",
+                ));
+            }
+            let key = key_tokens
+                .first()
+                .map(|token| resolve(token).value)
+                .unwrap_or_default();
+            Ok(Line::Entry {
+                key,
+                value: tokens.get(colon + 1..).unwrap_or_default().to_vec(),
+            })
+        }
+    }
+}
+
+/// A scalar's source text and its resolved value.
+fn resolve(token: &core_cst::GreenToken) -> Scalar {
+    use crate::yaml::kind;
+    let text = String::from_utf8_lossy(token.text()).into_owned();
+    let value = match token.kind() {
+        // `'it''s'` → `it's`. The only escape single quotes have.
+        kind::SINGLE_QUOTED => text
+            .strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .unwrap_or(&text)
+            .replace("''", "'"),
+        kind::DOUBLE_QUOTED => {
+            let inner = text
+                .strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .unwrap_or(&text);
+            unescape(&format!("\"{inner}\""))
+        }
+        // Plain scalars resolve to themselves. Deciding that `yes` is a boolean
+        // is YAML-version-dependent and ADR-008 already refused to make that
+        // call one layer down.
+        _ => text.clone(),
+    };
+    Scalar { text, value }
+}
+
+/// Turn the tokens after a `:` or a `-`, plus any nested lines, into a value.
+fn value_from(
+    tokens: &[&core_cst::GreenToken],
+    nested: &[&GreenNode],
+) -> Result<SemanticNode, Unmodelled> {
+    use crate::yaml::kind;
+
+    // Name the construct before falling back to a count. "A value of several
+    // tokens" is true and useless; "block scalars are not modelled yet" tells
+    // the user which line to look at and what we will not do with it.
+    for token in tokens {
+        let reason = match token.kind() {
+            kind::BLOCK_HEADER | kind::BLOCK_BODY => "block scalars are not modelled yet (M2)",
+            kind::ANCHOR | kind::ALIAS => "anchors and aliases are not modelled yet (M2)",
+            kind::TAG => "tags are not modelled yet (M2)",
+            kind::FLOW_PUNCT => "flow collections are not modelled yet (M2)",
+            _ => continue,
+        };
+        return Err(unmodelled(reason));
+    }
+
+    match tokens.len() {
+        // `key:` with children below it, or with nothing at all.
+        0 => {
+            if nested.is_empty() {
+                return Ok(SemanticNode::Scalar(Scalar {
+                    text: String::new(),
+                    value: String::new(),
+                }));
+            }
+            node_from_lines(nested)
+        }
+        1 => {
+            let scalar = tokens.first().map(|token| resolve(token)).ok_or_else(|| {
+                unmodelled("a value token vanished between counting and reading it")
+            })?;
+            if nested.is_empty() {
+                Ok(SemanticNode::Scalar(scalar))
+            } else {
+                // `key: value` with more-indented lines under it is a multi-line
+                // plain scalar or something stranger. Either way, not modelled.
+                Err(unmodelled(
+                    "a scalar with nested lines beneath it is not modelled yet (M2)",
+                ))
+            }
+        }
+        _ => Err(unmodelled(
+            "a value of several tokens — an anchor, tag or flow collection — is not modelled yet (M2)",
+        )),
+    }
+}
+
+/// Group sibling lines into the collection they describe.
+fn node_from_lines(lines: &[&GreenNode]) -> Result<SemanticNode, Unmodelled> {
+    let mut entries: Vec<(String, SemanticNode)> = Vec::new();
+    let mut items: Vec<SemanticNode> = Vec::new();
+
+    let mut index = 0usize;
+    while let Some(line) = lines.get(index) {
+        let nested = child_lines(line);
+        index += 1;
+        match classify(line)? {
+            Line::Blank => {}
+            Line::Item { rest } => items.push(item_value(&rest, &nested)?),
+            Line::Entry { key, value } => {
+                // A zero-indented sequence: `items:` with `- a` beneath it at
+                // the SAME indent. YAML allows it and Kubernetes manifests are
+                // written that way more often than not, but the indentation
+                // that builds the concrete tree makes those dashes *siblings*
+                // of the key rather than its children. Reading them as
+                // siblings would either refuse the file or, worse, describe a
+                // mapping and a sequence sharing one level — so the key adopts
+                // the run of items that immediately follows it.
+                if value.is_empty() && nested.is_empty() {
+                    let mut adopted: Vec<SemanticNode> = Vec::new();
+                    while let Some(next) = lines.get(index) {
+                        let next_nested = child_lines(next);
+                        match classify(next)? {
+                            Line::Item { rest } => {
+                                adopted.push(item_value(&rest, &next_nested)?);
+                                index += 1;
+                            }
+                            _ => break,
+                        }
+                    }
+                    if !adopted.is_empty() {
+                        entries.push((key, SemanticNode::Sequence(adopted)));
+                        continue;
+                    }
+                }
+                entries.push((key, value_from(&value, &nested)?));
+            }
+        }
+    }
+
+    match (entries.is_empty(), items.is_empty()) {
+        // An empty document. Distinguishable from `key:` with no value only by
+        // context, and neither is a collection.
+        (true, true) => Ok(SemanticNode::Scalar(Scalar {
+            text: String::new(),
+            value: String::new(),
+        })),
+        (false, true) => Ok(SemanticNode::Mapping(entries)),
+        (true, false) => Ok(SemanticNode::Sequence(items)),
+        // `- a` and `b: 1` as siblings, with the dashes not adopted by any key
+        // above them. Not valid YAML, and a view that picked one reading would
+        // be inventing a document nobody wrote.
+        (false, false) => Err(unmodelled(
+            "mapping entries and sequence items at the same level",
+        )),
+    }
+}
+
+/// A sequence item, which may be a scalar or a mapping that starts on the dash.
+fn item_value(
+    rest: &[&core_cst::GreenToken],
+    nested: &[&GreenNode],
+) -> Result<SemanticNode, Unmodelled> {
+    use crate::yaml::kind;
+
+    // `- name: web` followed by more-indented `image: nginx` is one mapping
+    // whose first pair happens to share the dash's line.
+    let Some(colon) = rest.iter().position(|token| token.kind() == kind::COLON) else {
+        return value_from(rest, nested);
+    };
+
+    let key_tokens = rest.get(..colon).unwrap_or_default();
+    if key_tokens.len() != 1 {
+        return Err(unmodelled(
+            "compound mapping keys are not modelled yet (M2)",
+        ));
+    }
+    let key = key_tokens
+        .first()
+        .map(|token| resolve(token).value)
+        .unwrap_or_default();
+    let inline = value_from(rest.get(colon + 1..).unwrap_or_default(), &[])?;
+
+    let mut entries = vec![(key, inline)];
+    let SemanticNode::Mapping(rest_of_it) = node_from_lines(nested)? else {
+        if nested.is_empty() {
+            return Ok(SemanticNode::Mapping(entries));
+        }
+        return Err(unmodelled(
+            "a sequence item mixing a mapping entry with non-entry lines",
+        ));
+    };
+    entries.extend(rest_of_it);
+    Ok(SemanticNode::Mapping(entries))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{SemanticNode, unescape};
@@ -308,16 +660,124 @@ mod tests {
         assert!(!view(r#"{"xs":[1,2]}"#).same_value(&view(r#"{"xs":[2,1]}"#)));
     }
 
-    #[test]
-    fn yaml_declines_rather_than_inventing_a_view() {
-        // The point of ADR-012: no view is an explicit refusal, never an empty
-        // one. An empty view would make konflux report "no changes".
-        let cst = crate::Yaml.parse(b"a: 1\n").expect("parses");
-        let err = crate::Yaml
+    // --- YAML -------------------------------------------------------------
+
+    fn yaml_view(src: &str) -> SemanticNode {
+        let cst = crate::Yaml.parse(src.as_bytes()).expect("parses");
+        crate::Yaml.semantic_view(&cst).expect("has a view")
+    }
+
+    fn yaml_refusal(src: &str) -> &'static str {
+        let cst = crate::Yaml.parse(src.as_bytes()).expect("parses");
+        crate::Yaml
             .semantic_view(&cst)
-            .expect_err("yaml has no semantic view yet");
-        assert_eq!(err.format, "yaml");
-        assert!(!err.reason.is_empty());
+            .expect_err("should refuse")
+            .reason
+    }
+
+    #[test]
+    fn indentation_becomes_nesting() {
+        let SemanticNode::Mapping(pairs) = yaml_view("spec:\n  replicas: 2\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((key, SemanticNode::Mapping(inner))) = pairs.first() else {
+            panic!("expected a nested mapping");
+        };
+        assert_eq!(key, "spec");
+        assert_eq!(inner.len(), 1);
+    }
+
+    #[test]
+    fn a_dash_list_becomes_a_sequence() {
+        let SemanticNode::Mapping(pairs) = yaml_view("xs:\n  - a\n  - b\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((_, SemanticNode::Sequence(items))) = pairs.first() else {
+            panic!("expected a sequence");
+        };
+        assert_eq!(items.len(), 2);
+    }
+
+    #[test]
+    fn a_sequence_item_continues_across_its_indented_lines() {
+        // `- name: web` then a deeper `image: ...` is ONE mapping, not two
+        // items. Getting this wrong shifts every path underneath it.
+        let SemanticNode::Mapping(pairs) =
+            yaml_view("containers:\n  - name: web\n    image: nginx:1.25\n")
+        else {
+            panic!("expected a mapping");
+        };
+        let Some((_, SemanticNode::Sequence(items))) = pairs.first() else {
+            panic!("expected a sequence");
+        };
+        assert_eq!(items.len(), 1, "the indented line started a second item");
+        let Some(SemanticNode::Mapping(entry)) = items.first() else {
+            panic!("expected the item to be a mapping");
+        };
+        let keys: Vec<&str> = entry.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["name", "image"]);
+    }
+
+    #[test]
+    fn a_colon_inside_a_value_is_not_the_separator() {
+        // `image: nginx:1.25` has two colons and one of them is punctuation.
+        let SemanticNode::Mapping(pairs) = yaml_view("image: nginx:1.25\n") else {
+            panic!("expected a mapping");
+        };
+        let Some((key, SemanticNode::Scalar(value))) = pairs.first() else {
+            panic!("expected a scalar");
+        };
+        assert_eq!(key, "image");
+        assert_eq!(value.value, "nginx:1.25");
+    }
+
+    #[test]
+    fn quoting_style_is_spelling_not_meaning() {
+        let plain = yaml_view("k: web\n");
+        let quoted = yaml_view("k: \"web\"\n");
+        let single = yaml_view("k: 'web'\n");
+        assert!(plain.same_value(&quoted));
+        assert!(plain.same_value(&single));
+        assert_ne!(plain, quoted, "source text must still differ");
+    }
+
+    #[test]
+    fn comments_and_blank_lines_are_not_content() {
+        // They carry no meaning, so a view without them is complete. Their
+        // bytes are the CST's business, where K1 already proves they survive.
+        assert!(yaml_view("# hi\n\na: 1\n").same_value(&yaml_view("a: 1\n")));
+    }
+
+    #[test]
+    fn unmodelled_constructs_refuse_and_say_which() {
+        // Each of these is a real YAML feature we do not model yet. Refusing
+        // names it; dropping it would leave a view with fewer keys than the
+        // document has, and a diff over that view would miss real edits.
+        for (src, expected) in [
+            ("a: {x: 1}\n", "flow collections"),
+            ("a: &x 1\n", "anchors and aliases"),
+            ("a: !!str 1\n", "tags"),
+            ("---\na: 1\n", "multi-document"),
+            ("a: |\n  text\n", "block scalars"),
+        ] {
+            let reason = yaml_refusal(src);
+            assert!(
+                reason.contains(expected),
+                "for {src:?} expected a reason mentioning {expected:?}, got {reason:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_line_we_cannot_classify_refuses_the_whole_document() {
+        // The load-bearing rule. Skipping the Helm template would produce a
+        // view claiming this document has one key, and a diff over it would
+        // report "no changes" for an edit inside the template.
+        let reason = yaml_refusal("a: 1\n{{- if .Values.x }}\nb: 2\n{{- end }}\n");
+        assert!(
+            !reason.is_empty(),
+            "a template must not be silently dropped"
+        );
     }
 
     #[test]

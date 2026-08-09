@@ -25,26 +25,29 @@ Published rates and the complete failure list live in
 by `gate/conformance` (ADR-009). **P4 is still not complete**: §4.1 names
 toml-test as its third suite, and `toml` arrives with strukt in Phase 2.
 
-**Next: YAML's `semantic_view`.** D3 was decided on 2026-08-09 — konflux is the
-flagship (ADR-010). M2's oracle is landed (ADR-011) and the diff algorithm is
-landed and format-agnostic: **`UNIMPLEMENTED_CASES` is 8, down from 9**, with
-both JSON cases green.
+**Next: M2's remaining diff work.** D3 was decided on 2026-08-09 — konflux is the
+flagship (ADR-010). The diff golden suite is **10/10 green**: the oracle
+(ADR-011), the format-agnostic algorithm, and `semantic_view` for both JSON and
+YAML (ADR-012, ADR-013) have all landed. `UNIMPLEMENTED_CASES` reached zero and
+the ratchet came out, exactly as ADR-011 said it would.
 
-Every one of the eight remaining is YAML, and they all fall together, because
-**YAML's CST is a flat list of lines** — `STREAM → DOCUMENT → LINE*` — so a
-semantic view has to be *inferred* from indentation. That single piece is the
-largest thing left in M2 and it closes three items at once: the eight golden
-cases, the **yaml reject-rate** gate before M3, and the **comment** golden cases
-deferred out of the oracle (re-indentation too, once trivia attachment is
-settled).
+**But ten golden cases is not the real number.** `cargo xtask semantic-coverage`
+measures the corpus: **YAML 237/750 (31.6%)**, JSON 250/250, **total 48.7%**. So
+konflux declines most real YAML today. Refusing is safe (ADR-012), not free, and
+the refusal ranking is the work queue in corpus order:
 
-Until it lands, konflux **refuses** on YAML rather than answering (ADR-012) —
-which is why `900-identical` is red: an empty diff and an agreement are the same
-bytes, so we may not emit one for a file we cannot read.
+| Files | Not modelled yet |
+|---:|---|
+| 204 | flow collections |
+| 145 | a line that is neither a mapping entry nor a sequence item — Helm `{{ }}`, most likely |
+| 68 | multi-document streams |
+| 32 | block scalars |
 
-D3 was decided **without the validation signal** §11 asked for; the two drafts
-in `docs/validation/` are still unposted. Do not read "konflux confirmed" as
-"konflux validated". The bet comes due at §14's kill rule.
+**Correction to the previous handoff.** It said `semantic_view` would close the
+yaml reject-rate gate. **It does not.** That gate is about `parse` refusing
+invalid documents, and this work sits entirely above `parse`. The block/flow
+knowledge now exists and could be wired back into validation, but that is
+separate work and nobody has done it.
 
 **Still blocked on Ayush, but nothing downstream waits on these:**
 
@@ -561,9 +564,28 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - *Lint conflict worth knowing:* clippy pedantic's `stable_sort_primitive`
         demands `sort_unstable`, which `clippy.toml` bans under §9.5. The
         project's law wins; byte-wise `sort_by` satisfies both.
-- [ ] **YAML `semantic_view`** — infer mappings, sequences and nesting from
-      indentation. The largest piece left in M2, and the same work the yaml
-      reject-rate gate has been waiting on, so it closes two items at once.
+- [x] **YAML `semantic_view`** — indentation becomes nesting, dashes become
+      sequences, quoting becomes spelling. → **ADR-013**.
+      - **Two inference bugs found by measurement, not by review**, while the
+        golden suite sat at 10/10 green and the corpus at 14.5%:
+        - **Comment lines attach to the preceding line, not as siblings.** The
+          lexer gives an unindented line to the innermost open line, so the
+          comment in `imageRegistry: ""` / `## E.g.` becomes that scalar's
+          *child*, and a literal reading refuses the file. **235 of 750 files.**
+        - **Zero-indented sequences.** `items:` with `- a` beneath it at the
+          same indent is the dominant Kubernetes style, and indentation makes
+          those dashes siblings of the key. **139 files.**
+      - Coverage after both: **14.5% → 23.3% → 31.6%**, and every remaining
+        bucket is a genuine unmodelled feature rather than a misreading.
+      - *Why the golden suite did not catch either:* ten hand-built cases are a
+        specification, not a sample. `semantic-coverage` is the sample, and it
+        is the reason this item shipped correct rather than merely green.
+- [ ] **Flow collections, Helm templates, multi-document streams, block
+      scalars** — M2's remaining coverage work, ordered by the corpus counts
+      above. Each is a refusal today (ADR-012), never a wrong answer.
+- [ ] **Wire block/flow context back into `parse`** to raise the yaml
+      reject-rate. The knowledge now exists in `semantic_view`; the validator
+      does not use it. This is what the standing M3 gate actually needs.
 - [ ] Side-by-side CLI output via `core-cli` — `--json` stable and schema-versioned.
 - [ ] Differential runner online: ours vs `diff3`/`git diff` on the corpus;
       divergences triaged into golden cases, never ignored.
