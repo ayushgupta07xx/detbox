@@ -35,3 +35,4 @@ because 001 was held open for it.
 | [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | accepted |
 | [008](ADR-008-conformance-semantics.md) | Conformance: reject invalid *structure*, and two rates instead of one | accepted |
 | [009](ADR-009-publishing-conformance-rates.md) | Conformance rates are published as a generated file CI regenerates and byte-compares | proposed |
+| [010](ADR-010-flagship-is-konflux.md) | konflux is the flagship (D3), decided without the validation signal | proposed |

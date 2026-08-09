@@ -25,13 +25,21 @@ Published rates and the complete failure list live in
 by `gate/conformance` (ADR-009). **P4 is still not complete**: §4.1 names
 toml-test as its third suite, and `toml` arrives with strukt in Phase 2.
 
-**Blocked on Ayush — and now there is genuinely nothing else to pick up.**
+**Next: konflux M2, structural diff.** **D3 was decided on 2026-08-09 — konflux
+is the flagship** (ADR-010) — so M2 onward is unblocked and the next session
+starts at M2's first item: *oracle first, the diff golden suite, confirm red.*
 
-1. **D3, the flagship call (konflux or bigsheet).** Blocks M2 and everything
-   after it. §11 makes D3 a read of the validation-post signal, and the two
-   drafts in `docs/validation/` are **not posted** as far as this file knows.
-   That is the critical path, and with M1 closed it is now the *only* path.
-2. **ADR-009** proposed, awaiting sign-off (§9.3).
+D3 was decided **without the validation signal** §11 asked for; the two drafts
+in `docs/validation/` are still unposted. Do not read "konflux confirmed" as
+"konflux validated". The bet comes due at §14's kill rule.
+
+**Still blocked on Ayush, but nothing downstream waits on these:**
+
+1. **ADR-009** (published conformance rates) and **ADR-010** (D3) — both
+   `proposed`, awaiting sign-off (§9.3).
+2. **D1** (brand + binary name), **D4** (licence files), branch protection on
+   `main`. **D2** (Tauri) is off the critical path until Phase 3 now that the
+   flagship is konflux.
 
 **Not blocked, but only time will fix it.** P1's fuzzing half accrues ~2 hours
 per night and resets whenever `core-cst`, `core-formats` or the fuzz targets
@@ -46,7 +54,8 @@ the "silently wrong" failure §0 ranks first, so this must rise before M3 ships 
 merge.
 
 **Accepted decisions**, so a new session does not re-litigate them: ADR-001
-through ADR-008 all accepted (ADR-009 is proposed); the ASan/LSan substitution
+through ADR-008 all accepted (ADR-009 and ADR-010 are proposed); D3 is decided
+and konflux is the flagship; the ASan/LSan substitution
 for §8's "ASan/UBSan" accepted (Rust has no UBSan; miri covers it); the corpus
 expansion to 1,250 files accepted.
 
@@ -204,14 +213,24 @@ blocking today against the weakest *true* statement available, and arm here:
 
 - [x] Draft r/devops post — `docs/validation/`
 - [x] Draft Ask HN post — `docs/validation/`
-- [!] **Post them.** Ayush handles all public communication, always. **This is
-      Phase 0's actual exit gate (§11) and it is still open.**
+- [~] **Post them.** Ayush handles all public communication, always. **No longer
+      D3's input** — D3 was decided without them (ADR-010), so §11's exit gate
+      closed by decision rather than by measurement. The drafts stay: asked
+      before there is anything to show, the same question still tells us which
+      incumbent is the real bar (§14). Now pre-launch work, not a blocker.
 - [!] **D1** — umbrella brand + `<b>` binary name. Blocks the multicall binary
       and the crates.io/org/domain reservation.
 - [!] **D2** — Tauri confirmation (needed before Phase 3, bigsheet's grid).
-- [!] **D3** — flagship confirmation after the signal read. Blocks konflux M2
-      onward. M1 proceeds without it: §11 says a weak signal still builds the
-      kernel via strukt, so CST + K1 for YAML/JSON is needed either way.
+- [x] **D3 — DECIDED 2026-08-09: konflux is the flagship.** M2 onward is
+      unblocked. → **ADR-010**.
+      - Decided **without the validation signal**: §11 made D3 a read of the
+        posts, and the posts are unsent. That is recorded rather than smoothed
+        over, because a later reader finding "konflux confirmed" is entitled to
+        know it was confirmed by judgement, not by evidence.
+      - The unvalidated bet is **deferred, not removed**. It comes due at §14's
+        kill rule — 8 weeks post-launch, <100 meaningful engagements and zero
+        organic issues, and konflux freezes.
+      - Consequence for D2: Tauri is off the critical path until Phase 3.
 - [!] **D4** — final licence (`MIT OR Apache-2.0` is declared per §2/§10; the
       LICENSE files are not written pending D4).
 - [!] **Enable branch protection on `main`** so `CODEOWNERS` has teeth.
@@ -225,8 +244,8 @@ blocking today against the weakest *true* statement available, and arm here:
 **Launch gate (§4.1):** P1–P4 green in public CI, benchmark table *including
 where Mergiraf and diff3 win*, 60-second screencast, README per §12.
 
-**Phase 0 accepted 2026-08-07.** M2 onward is blocked on **D3**; M1 is not
-(see §0.5).
+**Phase 0 accepted 2026-08-07. D3 decided 2026-08-09: konflux is the flagship**
+(ADR-010), so M2 onward is unblocked. M1 is finished.
 
 ### M1 — CST + K1 for YAML and JSON
 
