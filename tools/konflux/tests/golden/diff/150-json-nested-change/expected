@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/dependencies/left-pad",
+      "kind": "changed",
+      "significance": "semantic",
+      "before": "\"1.3.0\"",
+      "after": "\"1.4.0\""
+    }
+  ]
+}

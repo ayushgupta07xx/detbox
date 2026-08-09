@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/spec/template/spec/containers/0/image",
+      "kind": "changed",
+      "significance": "semantic",
+      "before": "nginx:1.25",
+      "after": "nginx:1.27"
+    }
+  ]
+}

@@ -25,9 +25,16 @@ Published rates and the complete failure list live in
 by `gate/conformance` (ADR-009). **P4 is still not complete**: §4.1 names
 toml-test as its third suite, and `toml` arrives with strukt in Phase 2.
 
-**Next: konflux M2, structural diff.** **D3 was decided on 2026-08-09 — konflux
-is the flagship** (ADR-010) — so M2 onward is unblocked and the next session
-starts at M2's first item: *oracle first, the diff golden suite, confirm red.*
+**Next: konflux M2, the structural diff implementation.** D3 was decided on
+2026-08-09 — konflux is the flagship (ADR-010). M2's **oracle is landed and red**
+(ADR-011): 10 diff golden cases, 9 unproven, recorded as `UNIMPLEMENTED_CASES`
+and ratcheting down only. The next session implements against it — semantic-tree
+matching and `semantic_view` — and drives that constant to zero.
+
+Two things M2 must also close, both recorded above: the **comment** and
+**re-indentation** golden cases deferred out of the oracle, and the **yaml
+reject-rate** gate, which needs the same block/flow context `semantic_view`
+brings.
 
 D3 was decided **without the validation signal** §11 asked for; the two drafts
 in `docs/validation/` are still unposted. Do not read "konflux confirmed" as
@@ -483,8 +490,39 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
 *Proof obligation: **P4**; `gate/differential` arms. Gates: `gate/golden`,
 `gate/differential`.*
 
-- [ ] Oracle first: diff golden suite — hand-built cases where line-based diff
-      is wrong and structural diff is right. **Confirm red.**
+- [x] **Oracle first: diff golden suite** — 10 hand-built cases where line-based
+      diff is wrong and structural diff is right. **Confirmed red 2026-08-09: 9
+      of 10 fail, all with one cause — no diff implementation.** → **ADR-011**.
+      - Contract landed: `konflux::diff` with `Change`/`ChangeKind`/
+        `Significance`/`DiffReport`, and `core-verify::golden::run_pairs_dir`,
+        a two-input runner (a diff takes two documents; `run_dir` takes one).
+      - **The golden is the `--json` output**, not the rendered view, so
+        `core-cli` C1's stable machine contract is under test before it has an
+        implementation rather than retrofitted after it leaks into a script.
+      - **Paths are RFC 6901 pointers.** A path is an identity and may not be
+        ambiguous: real Helm charts contain `kubernetes.io/os`, which a dotted
+        path cannot round-trip. Case `120` holds that decision in place.
+      - **`kind` and `significance` are separate fields**, and cases `010` and
+        `130` are why: a reordered *mapping* is `moved`+formatting, a reordered
+        *sequence* is `moved`+semantic. Line diff renders them identically, and
+        confusing them either invents conflicts or loses changes.
+      - **It lands red-but-recorded, not red.** M1's oracle PR could merge green
+        because the parser landed with it; a diff implementation cannot (§15
+        gives it the majority of the time budget). So `UNIMPLEMENTED_CASES = 9`
+        is checked exactly, per **ADR-003's idiom** — blocking today against the
+        weakest true statement, arming on a published schedule. Proven red in
+        both directions: recording 8 gives the goldens-are-evidence failure,
+        recording 10 gives *"good news, and a constant to lower"*.
+      - *Non-vacuity guard, the lesson M1 paid for:* a null diff must fail 9 of
+        10 cases. If formatting-only changes were reported as *no* change, the
+        three formatting cases would be satisfied by `[]` and a third of the
+        suite would prove nothing. `900-identical` is the deliberate control —
+        an oracle no output can satisfy is as broken as one everything does.
+      - *Deferred, and recorded rather than guessed:* **comments** and
+        **re-indentation**. Both depend on trivia attachment in the CST walk,
+        and a guessed `expected` is a guess wearing evidence's clothes. konflux
+        promises *"comments and key order preserved"* and the comment half is
+        currently proven by nothing.
 - [ ] Semantic-tree matching (Chawathe/GumTree-class), Dijkstra-style structural
       diff à la difftastic.
 - [ ] Side-by-side CLI output via `core-cli` — `--json` stable and schema-versioned.

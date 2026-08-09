@@ -1,0 +1,3 @@
+port: 8080
+name: web
+image: nginx:1.25
