@@ -20,12 +20,15 @@ it points somewhere unhelpful.
 | `010-mapping-keys-reordered` | three lines changed | `moved` · **formatting** at the mapping — mapping order is not meaning |
 | `020-scalar-quoting-style` | one line changed | `changed` · **formatting** at `/name` — `web` and `"web"` are the same string |
 | `030-json-key-order` | the whole line changed | `moved` · **formatting** — same, in JSON |
+| `040-flow-mapping-reordered` | the whole line changed | `moved` · **formatting** — flow mapping order is not meaning either |
 | `100-sequence-insert-in-middle` | often renders as *"gamma changed to beta, gamma added"* | one `added` · semantic at `/items/1` |
 | `110-nested-value-changed` | one line, no path context | `changed` · semantic at `/spec/template/spec/containers/0/image` |
 | `120-key-containing-a-slash` | one line | `changed` · semantic at `/nodeSelector/kubernetes.io~1os` |
 | `130-sequence-reordered` | two lines changed | `moved` · **semantic** at `/initContainers` |
 | `140-key-removed` | one line removed | `removed` · semantic at `/resources/limits` |
 | `150-json-nested-change` | one line changed | `changed` · semantic at `/dependencies/left-pad` |
+| `160-flow-sequence-value-changed` | one line changed | `changed` · semantic at `/ports/1` — inside a flow sequence |
+| `170-flow-sequence-item-added` | one line changed | `added` · semantic at `/args/0` — `[]` is empty, not a scalar |
 | `900-identical` | nothing | nothing — **the control**, see below |
 
 **`010` against `130` is the pair that matters most.** Both reorder a
@@ -39,10 +42,10 @@ invents conflicts or loses changes.
 here on purpose: an oracle that no possible output satisfies is as broken as one
 everything satisfies, so the empty answer must be reachable and must be pinned.
 
-The other nine all fail a diff that reports nothing, including the three
+The other twelve all fail a diff that reports nothing, including the three
 formatting-only cases — which is why formatting changes are *reported* rather
 than left as an empty list. `the_suite_is_not_vacuous` asserts exactly this: it
-runs a null diff over the suite and requires 9 of 10 cases to fail. If someone
+runs a null diff over the suite and requires 12 of 13 cases to fail. If someone
 later makes formatting changes silent, that test goes red rather than the suite
 quietly becoming satisfiable by returning `[]`.
 

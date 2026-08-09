@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/args/0",
+      "kind": "added",
+      "significance": "semantic",
+      "after": "--verbose"
+    }
+  ]
+}

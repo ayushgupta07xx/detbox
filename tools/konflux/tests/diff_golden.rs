@@ -17,11 +17,11 @@ use std::path::PathBuf;
 
 /// Every case in the suite. A shrinking suite is a weakening oracle (§8), so
 /// this is asserted rather than trusted.
-const EXPECTED_CASES: usize = 10;
+const EXPECTED_CASES: usize = 13;
 
 /// Cases a diff that reports nothing must still fail. Everything except the
 /// `900-identical` control — see the suite README.
-const CASES_A_NULL_DIFF_FAILS: usize = 9;
+const CASES_A_NULL_DIFF_FAILS: usize = 12;
 
 fn suite() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/diff")

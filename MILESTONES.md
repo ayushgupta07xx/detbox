@@ -31,17 +31,19 @@ flagship (ADR-010). The diff golden suite is **10/10 green**: the oracle
 YAML (ADR-012, ADR-013) have all landed. `UNIMPLEMENTED_CASES` reached zero and
 the ratchet came out, exactly as ADR-011 said it would.
 
-**But ten golden cases is not the real number.** `cargo xtask semantic-coverage`
-measures the corpus: **YAML 237/750 (31.6%)**, JSON 250/250, **total 48.7%**. So
-konflux declines most real YAML today. Refusing is safe (ADR-012), not free, and
-the refusal ranking is the work queue in corpus order:
+**Coverage is the number that matters, not the golden count.** `cargo xtask
+semantic-coverage` measures the corpus: **YAML 363/750 (48.4%)**, JSON 250/250,
+**total 61.3%**. The refusal ranking is the work queue in corpus order:
 
 | Files | Not modelled yet |
 |---:|---|
-| 204 | flow collections |
 | 145 | a line that is neither a mapping entry nor a sequence item — Helm `{{ }}`, most likely |
-| 68 | multi-document streams |
-| 32 | block scalars |
+| 76 | block scalars |
+| 74 | multi-document streams |
+| 25 | mapping entries and sequence items at the same level |
+| 23 | a value of several tokens (anchor, tag) |
+
+konflux still declines half of real YAML. Refusing is safe (ADR-012), not free.
 
 **Correction to the previous handoff.** It said `semantic_view` would close the
 yaml reject-rate gate. **It does not.** That gate is about `parse` refusing
@@ -580,9 +582,27 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - *Why the golden suite did not catch either:* ten hand-built cases are a
         specification, not a sample. `semantic-coverage` is the sample, and it
         is the reason this item shipped correct rather than merely green.
-- [ ] **Flow collections, Helm templates, multi-document streams, block
-      scalars** — M2's remaining coverage work, ordered by the corpus counts
-      above. Each is a refusal today (ADR-012), never a wrong answer.
+- [x] **Flow collections** — `{a: 1}` and `[1, 2]`, nested, empty, and inside
+      block structure. A small recursive parse of one line's tokens, separate
+      from the block reader because the two disagree about what ends a value:
+      indentation there, a bracket here.
+      - Coverage **31.6% → 48.4%** for YAML, 48.7% → **61.3%** overall. The
+        largest single unlock the queue had.
+      - Depth-capped at 64 and refused past it. A fuzzer will send a document
+        that is nothing but brackets, and `core-cst`'s destructor taught this
+        exact lesson at M1 — recursion must decline rather than take the
+        process with it. Tested with 200 levels.
+      - Three golden cases added (`040`, `160`, `170`), **confirmed red first**.
+      - *Known gap, deliberately not guessed at:* switching a mapping between
+        flow and block spelling reports **no change at all**. It is not a
+        semantic change, and attributing a formatting change to a container
+        would need containers to carry source text — which they deliberately do
+        not, because inlining a 400-line subtree into a JSON field is
+        unreadable. Reporting mapping *reorder* as formatting but flow↔block as
+        nothing is an inconsistency worth a decision, and it is Ayush's.
+- [ ] **Helm templates, block scalars, multi-document streams** — the rest of
+      M2's coverage work, ordered by the corpus counts above. Each is a refusal
+      today (ADR-012), never a wrong answer.
 - [ ] **Wire block/flow context back into `parse`** to raise the yaml
       reject-rate. The knowledge now exists in `semantic_view`; the validator
       does not use it. This is what the standing M3 gate actually needs.
