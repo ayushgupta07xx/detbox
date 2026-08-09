@@ -138,3 +138,26 @@ and `181` pin both shapes, and a unit test states the rule.
 
 Coverage: YAML **48.4% → 57.2%**.
 
+## Amendment 2 — multi-document streams are their own variant (2026-08-09)
+
+`SemanticNode::Stream` rather than reusing `Sequence`, even though both index
+the same way and the diff walks them with the same code.
+
+The reason is a path being an identity (ADR-011). One document whose root is a
+two-item list and a two-document file produce the *same* paths — `/0`, `/1` —
+and mean entirely different things. Sharing a variant would let a diff pair
+document 0 against list item 0 and report the difference as ordinary edits
+inside a collection. The separate variant makes that mismatch a replacement,
+which is the honest answer: those two files are not the same shape.
+
+**A single document with explicit markers is not a stream.** `---\na: 1` and
+`a: 1` are one document either way, so wrapping the first would report a
+formatting difference as a structural one. The stream appears only at two
+documents or more.
+
+**A marker indented inside a collection is refused**, because there is no
+answer to which side of it the surrounding keys belong to, and guessing is the
+invention ADR-012 exists to ban.
+
+Coverage: YAML **57.2% → 64.7%**.
+
