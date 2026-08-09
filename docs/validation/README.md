@@ -14,6 +14,18 @@ confirmed as flagship. Weak signal → **pivot the flagship to bigsheet**, konfl
 slides to Phase 4 (the kernel still gets built, via strukt). That call is
 **Decision D3** and it is Ayush's alone.
 
+## Superseded as D3's input — 2026-08-09
+
+**D3 was decided directly: konflux is the flagship** ([ADR-010](../../adr/ADR-010-flagship-is-konflux.md)).
+These posts were never sent, so §11's exit gate closed by judgement rather than
+by measurement, and nothing below should be read as evidence that was gathered.
+
+They are kept, and still worth posting, for a different job: asked before there
+is anything to show, the same question tells us **which incumbent is the real
+bar** and what a painful merge actually looks like in the wild (§14). That
+feeds M5's semantic layer and the launch benchmark table — it no longer feeds a
+decision.
+
 ## Files
 
 | File | Venue | Status |
