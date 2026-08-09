@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/name",
+      "kind": "changed",
+      "significance": "formatting",
+      "before": "web",
+      "after": "\"web\""
+    }
+  ]
+}

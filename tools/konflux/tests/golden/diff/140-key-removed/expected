@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/resources/limits",
+      "kind": "removed",
+      "significance": "semantic",
+      "before": "1"
+    }
+  ]
+}

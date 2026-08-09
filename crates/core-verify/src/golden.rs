@@ -38,6 +38,15 @@ pub enum SuiteError {
         /// Which file was missing.
         missing: &'static str,
     },
+    /// A pair case's two sides do not name the same format.
+    MismatchedPair {
+        /// The case directory.
+        path: PathBuf,
+        /// Extension found on the `a` side.
+        a: String,
+        /// Extension found on the `b` side.
+        b: String,
+    },
     /// The suite contains no cases. Invariant V4: vacuous is not passing.
     Empty {
         /// The suite directory.
@@ -54,6 +63,12 @@ impl std::fmt::Display for SuiteError {
             Self::MalformedCase { path, missing } => write!(
                 f,
                 "golden case {} is missing its `{missing}` file",
+                path.display()
+            ),
+            Self::MismatchedPair { path, a, b } => write!(
+                f,
+                "golden pair case {} has `a.{a}` and `b.{b}` — a diff between two \
+                 different formats is not a case, it is a mistake",
                 path.display()
             ),
             Self::Empty { path } => write!(
@@ -169,6 +184,119 @@ where
         passed,
         failures,
     })
+}
+
+/// The two sides of a pair case, plus the format they are both written in.
+#[derive(Debug)]
+pub struct Pair {
+    /// Bytes of the `a.<ext>` side — "before", or "ours".
+    pub a: Vec<u8>,
+    /// Bytes of the `b.<ext>` side — "after", or "theirs".
+    pub b: Vec<u8>,
+    /// Shared extension, lowercase and without the dot. Selects the format,
+    /// exactly as `xtask corpus-k1` does, so a case cannot silently be run
+    /// through the wrong parser.
+    pub extension: String,
+}
+
+/// Run every *pair* case in `suite`: `a.<ext>` and `b.<ext>` in, one `expected`
+/// out, compared byte-for-byte.
+///
+/// A diff or a merge takes more than one input, so [`run_dir`]'s single-input
+/// shape cannot express it. Everything else is deliberately identical —
+/// discovery order, emptiness, the rendered failure — because a second harness
+/// with second-hand discipline is how the two drift apart.
+///
+/// # Errors
+///
+/// Returns [`SuiteError`] if the suite cannot be read, a case is missing a
+/// side or its `expected`, the two sides disagree on format, or the suite is
+/// empty.
+pub fn run_pairs_dir<F>(suite: &Path, transform: F) -> Result<Report, SuiteError>
+where
+    F: Fn(&Pair) -> Vec<u8>,
+{
+    let cases = discover(suite)?;
+    if cases.is_empty() {
+        return Err(SuiteError::Empty {
+            path: suite.to_path_buf(),
+        });
+    }
+
+    let mut passed = 0;
+    let mut failures = Vec::new();
+    for case in cases {
+        let (a_path, a_ext) = side(&case, 'a')?;
+        let (b_path, b_ext) = side(&case, 'b')?;
+        if a_ext != b_ext {
+            return Err(SuiteError::MismatchedPair {
+                path: case,
+                a: a_ext,
+                b: b_ext,
+            });
+        }
+        let pair = Pair {
+            a: std::fs::read(&a_path).map_err(|_| SuiteError::MalformedCase {
+                path: case.clone(),
+                missing: "a.<ext>",
+            })?,
+            b: std::fs::read(&b_path).map_err(|_| SuiteError::MalformedCase {
+                path: case.clone(),
+                missing: "b.<ext>",
+            })?,
+            extension: a_ext,
+        };
+        let expected = read(&case, "expected")?;
+        let actual = transform(&pair);
+        if actual == expected {
+            passed += 1;
+        } else {
+            failures.push(Failure {
+                case,
+                diff: render_diff(&expected, &actual),
+            });
+        }
+    }
+    Ok(Report {
+        suite: suite.to_path_buf(),
+        passed,
+        failures,
+    })
+}
+
+/// Locate `<side>.<ext>` in a pair case, returning its path and extension.
+fn side(case: &Path, side: char) -> Result<(PathBuf, String), SuiteError> {
+    let missing = if side == 'a' { "a.<ext>" } else { "b.<ext>" };
+    let malformed = || SuiteError::MalformedCase {
+        path: case.to_path_buf(),
+        missing,
+    };
+    let entries = std::fs::read_dir(case).map_err(|_| malformed())?;
+
+    // Collected and sorted rather than taken first-match: two files named
+    // `a.yaml` and `a.json` in one case must be a deterministic error, not a
+    // coin flip decided by filesystem order (invariant V3).
+    let mut found: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_stem().and_then(|s| s.to_str()) == Some(&side.to_string())
+                && p.extension().is_some()
+        })
+        .collect();
+    found.sort_by(|a, b| a.as_os_str().cmp(b.as_os_str()));
+
+    let mut sides = found.into_iter();
+    let path = sides.next().ok_or_else(malformed)?;
+    if sides.next().is_some() {
+        return Err(malformed());
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(malformed)?
+        .to_ascii_lowercase();
+    Ok((path, ext))
 }
 
 /// Case directories under `suite`, byte-wise sorted (invariant V3).

@@ -1,9 +1,9 @@
 //! # `konflux` — structural diff & 3-way merge for configs
 //!
-//! > **FLAGSHIP, pending Decision D3** (MASTER_PLAN §16). The flagship is
-//! > confirmed by Ayush after the Phase 0 validation read, not by this crate.
-//! > If the signal is weak, bigsheet takes the flagship slot and konflux slides
-//! > to Phase 4 (§11).
+//! > **FLAGSHIP** — Decision D3, made 2026-08-09 (ADR-010). It was decided
+//! > *without* the §11 validation read, so "flagship" here means "the product
+//! > being built first" and never "the product whose demand was measured".
+//! > Nothing public may imply otherwise.
 //!
 //! **Mission.** End line-based merge for structured config.
 //!
@@ -40,6 +40,14 @@
 //!
 //! ## Status
 //!
-//! Phase 0 scaffold — no code. Next: **M1**, CST + K1 for YAML/JSON, which is
-//! blocked on ADR-001 (CST representation) and does not start until Ayush
-//! accepts Phase 0.
+//! **M1 complete** — `core-cst` per ADR-001, YAML and JSON parse/serialize, K1
+//! green on 1,000 corpus files, conformance published (ADR-009).
+//!
+//! **M2 in progress — structural diff.** [`diff()`] is the contract and returns
+//! no changes: the golden suite is written and merged before the implementation
+//! (§8), so it is red on purpose. See [`mod@diff`] and ADR-011 for why the
+//! golden `expected` files are the tool's `--json` output, not its rendering.
+
+pub mod diff;
+
+pub use diff::{Change, ChangeKind, DiffError, DiffReport, Significance, diff};

@@ -25,9 +25,22 @@ Published rates and the complete failure list live in
 by `gate/conformance` (ADR-009). **P4 is still not complete**: §4.1 names
 toml-test as its third suite, and `toml` arrives with strukt in Phase 2.
 
-**Next: konflux M2, structural diff.** **D3 was decided on 2026-08-09 — konflux
-is the flagship** (ADR-010) — so M2 onward is unblocked and the next session
-starts at M2's first item: *oracle first, the diff golden suite, confirm red.*
+**Next: YAML's `semantic_view`.** D3 was decided on 2026-08-09 — konflux is the
+flagship (ADR-010). M2's oracle is landed (ADR-011) and the diff algorithm is
+landed and format-agnostic: **`UNIMPLEMENTED_CASES` is 8, down from 9**, with
+both JSON cases green.
+
+Every one of the eight remaining is YAML, and they all fall together, because
+**YAML's CST is a flat list of lines** — `STREAM → DOCUMENT → LINE*` — so a
+semantic view has to be *inferred* from indentation. That single piece is the
+largest thing left in M2 and it closes three items at once: the eight golden
+cases, the **yaml reject-rate** gate before M3, and the **comment** golden cases
+deferred out of the oracle (re-indentation too, once trivia attachment is
+settled).
+
+Until it lands, konflux **refuses** on YAML rather than answering (ADR-012) —
+which is why `900-identical` is red: an empty diff and an agreement are the same
+bytes, so we may not emit one for a file we cannot read.
 
 D3 was decided **without the validation signal** §11 asked for; the two drafts
 in `docs/validation/` are still unposted. Do not read "konflux confirmed" as
@@ -483,10 +496,74 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
 *Proof obligation: **P4**; `gate/differential` arms. Gates: `gate/golden`,
 `gate/differential`.*
 
-- [ ] Oracle first: diff golden suite — hand-built cases where line-based diff
-      is wrong and structural diff is right. **Confirm red.**
-- [ ] Semantic-tree matching (Chawathe/GumTree-class), Dijkstra-style structural
-      diff à la difftastic.
+- [x] **Oracle first: diff golden suite** — 10 hand-built cases where line-based
+      diff is wrong and structural diff is right. **Confirmed red 2026-08-09: 9
+      of 10 fail, all with one cause — no diff implementation.** → **ADR-011**.
+      - Contract landed: `konflux::diff` with `Change`/`ChangeKind`/
+        `Significance`/`DiffReport`, and `core-verify::golden::run_pairs_dir`,
+        a two-input runner (a diff takes two documents; `run_dir` takes one).
+      - **The golden is the `--json` output**, not the rendered view, so
+        `core-cli` C1's stable machine contract is under test before it has an
+        implementation rather than retrofitted after it leaks into a script.
+      - **Paths are RFC 6901 pointers.** A path is an identity and may not be
+        ambiguous: real Helm charts contain `kubernetes.io/os`, which a dotted
+        path cannot round-trip. Case `120` holds that decision in place.
+      - **`kind` and `significance` are separate fields**, and cases `010` and
+        `130` are why: a reordered *mapping* is `moved`+formatting, a reordered
+        *sequence* is `moved`+semantic. Line diff renders them identically, and
+        confusing them either invents conflicts or loses changes.
+      - **It lands red-but-recorded, not red.** M1's oracle PR could merge green
+        because the parser landed with it; a diff implementation cannot (§15
+        gives it the majority of the time budget). So `UNIMPLEMENTED_CASES = 9`
+        is checked exactly, per **ADR-003's idiom** — blocking today against the
+        weakest true statement, arming on a published schedule. Proven red in
+        both directions: recording 8 gives the goldens-are-evidence failure,
+        recording 10 gives *"good news, and a constant to lower"*.
+      - *Non-vacuity guard, the lesson M1 paid for:* a null diff must fail 9 of
+        10 cases. If formatting-only changes were reported as *no* change, the
+        three formatting cases would be satisfied by `[]` and a third of the
+        suite would prove nothing. `900-identical` is the deliberate control —
+        an oracle no output can satisfy is as broken as one everything does.
+      - *Deferred, and recorded rather than guessed:* **comments** and
+        **re-indentation**. Both depend on trivia attachment in the CST walk,
+        and a guessed `expected` is a guess wearing evidence's clothes. konflux
+        promises *"comments and key order preserved"* and the comment half is
+        currently proven by nothing.
+- [~] **Semantic-tree matching.** The algorithm is landed and format-agnostic;
+      **JSON is green, YAML is not.** `UNIMPLEMENTED_CASES` **9 → 8**.
+      → **ADR-012**.
+      - *The finding that reshaped this item:* **YAML's CST has no structure to
+        match.** M1 built it as `STREAM → DOCUMENT → LINE*` — a flat list of
+        lines with indentation tokens, lossless and structural by design. JSON's
+        is already nested. So this splits three ways, very unequally: the
+        matching algorithm (done), JSON's `semantic_view` (done, small), and
+        YAML's `semantic_view` (**not done, and the largest piece left in M2**).
+      - Landed: `core_formats::semantic` with `SemanticNode`/`Scalar`, the
+        `Format::semantic_view` trait method, and konflux's walk — LCS alignment
+        so a mid-sequence insert is one `added` rather than a positional
+        cascade, permutation detection so a reorder is one `moved`, RFC 6901
+        paths, and output sorted by path bytes then kind (§9.5).
+      - **Only strings are normalised.** `1.0` vs `1.00` reads as *semantic*,
+        deliberately: calling them equal needs a numeric interpretation this
+        layer refuses to make, the same line ADR-008 drew on `yes`. Over-
+        reporting a change is noisy; under-reporting one loses an edit in a
+        merge, and only one of those is recoverable.
+      - **A format with no view is refused, never answered** (ADR-012). An empty
+        diff and an agreement are the same bytes, so returning `[]` for a file
+        we cannot read would give one spelling to two opposite meanings. That is
+        why `900-identical` is currently red: konflux cannot say even "no
+        changes" about a YAML file yet.
+      - *Gap found and closed in the same session:* the two JSON goldens cover a
+        mapping reorder and a nested scalar change and **no sequences at all**,
+        so the LCS and permutation code would have shipped untested behind a
+        green suite. Eight unit tests now cover it — JSON has arrays, so they
+        did not have to wait for YAML.
+      - *Lint conflict worth knowing:* clippy pedantic's `stable_sort_primitive`
+        demands `sort_unstable`, which `clippy.toml` bans under §9.5. The
+        project's law wins; byte-wise `sort_by` satisfies both.
+- [ ] **YAML `semantic_view`** — infer mappings, sequences and nesting from
+      indentation. The largest piece left in M2, and the same work the yaml
+      reject-rate gate has been waiting on, so it closes two items at once.
 - [ ] Side-by-side CLI output via `core-cli` — `--json` stable and schema-versioned.
 - [ ] Differential runner online: ours vs `diff3`/`git diff` on the corpus;
       divergences triaged into golden cases, never ignored.
