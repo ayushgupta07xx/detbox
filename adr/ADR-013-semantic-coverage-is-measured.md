@@ -1,6 +1,6 @@
 # ADR-013: YAML's semantic view, and publishing how much of the corpus it models
 
-**Date:** 2026-08-09 · **Status:** proposed
+**Date:** 2026-08-09 · **Status:** accepted (2026-08-09)
 
 ## Context
 

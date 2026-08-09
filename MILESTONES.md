@@ -53,11 +53,23 @@ separate work and nobody has done it.
 
 **Still blocked on Ayush, but nothing downstream waits on these:**
 
-1. **ADR-009** (published conformance rates) and **ADR-010** (D3) — both
-   `proposed`, awaiting sign-off (§9.3).
-2. **D1** (brand + binary name), **D4** (licence files), branch protection on
-   `main`. **D2** (Tauri) is off the critical path until Phase 3 now that the
-   flagship is konflux.
+1. **D1** — the umbrella brand and the `<b>` binary name. Blocks the multicall
+   binary and the crates.io/org/domain reservation. Needs an actual name; §16
+   makes it Ayush's alone and there is nothing to proceed on without one.
+2. **D4** — the LICENSE files. `MIT OR Apache-2.0` is declared in `Cargo.toml`
+   and the choice is settled; only the files are missing. **Not written, on
+   purpose:** the Apache-2.0 text must come from the canonical source, and the
+   two places it exists locally are a Helm chart carrying Broadcom's copyright
+   header and my memory. Neither is an acceptable provenance for a legal
+   document. One fetch settles it.
+3. **Branch protection on `main`**, so `CODEOWNERS` has teeth. It would have
+   caught two real slips this session: a three-deep PR stack that merged into
+   base branches instead of `main`, and a local `main` left without an upstream
+   after the history rewrite.
+
+**ADR-009 through ADR-013 accepted 2026-08-09.** ADR-010 was accepted with its
+reasoning as drafted — assembled from the plan's own arguments rather than from
+a separately stated rationale — and that provenance is recorded in the ADR.
 
 **Not blocked, but only time will fix it.** P1's fuzzing half accrues ~2 hours
 per night and resets whenever `core-cst`, `core-formats` or the fuzz targets
@@ -72,7 +84,7 @@ the "silently wrong" failure §0 ranks first, so this must rise before M3 ships 
 merge.
 
 **Accepted decisions**, so a new session does not re-litigate them: ADR-001
-through ADR-008 all accepted (ADR-009 and ADR-010 are proposed); D3 is decided
+through ADR-013 all accepted; D3 is decided
 and konflux is the flagship; the ASan/LSan substitution
 for §8's "ASan/UBSan" accepted (Rust has no UBSan; miri covers it); the corpus
 expansion to 1,250 files accepted.

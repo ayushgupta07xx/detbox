@@ -1,6 +1,6 @@
 # ADR-011: The diff golden is the `--json` output, and it lands red-but-recorded
 
-**Date:** 2026-08-09 · **Status:** proposed
+**Date:** 2026-08-09 · **Status:** accepted (2026-08-09)
 
 ## Context
 

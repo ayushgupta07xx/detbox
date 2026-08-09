@@ -1,6 +1,6 @@
 # ADR-012: A format with no semantic view is refused, never answered
 
-**Date:** 2026-08-09 · **Status:** proposed
+**Date:** 2026-08-09 · **Status:** accepted (2026-08-09)
 
 ## Context
 
