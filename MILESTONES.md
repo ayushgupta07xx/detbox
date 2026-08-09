@@ -32,22 +32,31 @@ YAML (ADR-012, ADR-013) have all landed. `UNIMPLEMENTED_CASES` reached zero and
 the ratchet came out, exactly as ADR-011 said it would.
 
 **Coverage is the number that matters, not the golden count.** `cargo xtask
-semantic-coverage` measures the corpus: **YAML 429/750 (57.2%)**, JSON 250/250,
-**total 67.9%**. The refusal ranking is the work queue in corpus order:
+semantic-coverage` measures the corpus: **YAML 485/750 (64.7%)**, JSON 250/250,
+**total 73.5%**. What is left:
 
 | Files | Not modelled yet |
 |---:|---|
-| 145 | Helm templates — a line that is neither a mapping entry nor a sequence item |
-| 74 | multi-document streams |
-| 27 | mapping entries and sequence items at the same level |
-| 24 | a value of several tokens (anchor, tag) |
+| 145 | **Helm templates** — see below, a design question before a coding one |
+| 39 | mapping entries and sequence items at the same level |
+| 25 | a value of several tokens (anchor, tag) |
+| 21 | a sequence item mixing a mapping entry with non-entry lines |
+| 18 | a flow collection that does not start the value |
 
-**Helm templates are next by size and are not a parsing problem.** `{{- if
-.Values.rbac.create -}}` is control flow, not data: it decides whether the rest
-of the document exists. Treating those lines as ignorable would make two charts
-differing only in their condition diff as identical — silently wrong. Treating
-them as data invents a reading. **What it means to diff a template is a design
-question and an ADR, and part of it is Ayush's**, so it was not started blind.
+**Helm templates are the last large bucket and they need a decision, not code.**
+`{{- if .Values.rbac.create -}}` is control flow: it decides whether the rest of
+the document exists. Three readings, none obviously right:
+
+1. **Keep refusing.** Safe; konflux stays unusable on a fifth of real charts.
+2. **Opaque nodes compared by source text.** Diffs work, but a template that
+   *moves* reads as a change to whatever it lands beside — and it needs
+   `Mapping` to hold unkeyed entries, which is a structural change.
+3. **Model conditionals as structure.** Correct, and much larger — arguably a
+   chart-aware layer rather than a YAML one.
+
+Ignoring template lines is not on the list: two charts differing only in their
+condition would diff as identical, which is the silently-wrong failure §0 ranks
+first.
 
 **Correction to the previous handoff.** It said `semantic_view` would close the
 yaml reject-rate gate. **It does not.** That gate is about `parse` refusing
@@ -633,10 +642,20 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
         evidence, and the distinction that matters is that this was an unmerged
         draft corrected toward the truth, not a merged golden bent toward the
         code. The code was right; the prediction was not.
-- [ ] **Helm templates** (145) — the largest remaining bucket, and a design
-      question before it is a coding one. See the handoff note above.
-- [ ] **Multi-document streams** (74) — needs `SemanticNode` to model a document
-      list, which is a structural change rather than another leaf type.
+- [x] **Multi-document streams** — `---` and `...` split the top level into
+      documents. → **ADR-013 amendment 2**.
+      - `SemanticNode::Stream`, deliberately not reusing `Sequence`: one
+        document whose root is a two-item list and a two-document file produce
+        the same paths and mean different things, and a shared variant would
+        diff document 0 against list item 0.
+      - One document with explicit markers is **not** a stream — otherwise
+        `---\na: 1` versus `a: 1` reports a formatting difference as structural.
+      - A marker indented inside a collection is refused: there is no answer to
+        which side of it the surrounding keys belong to.
+      - Coverage **57.2% → 64.7%** for YAML, **73.5%** overall.
+- [ ] **Helm templates** (145) — the last large bucket. A design decision first;
+      the three readings are in the handoff above and option 2 needs `Mapping`
+      to hold unkeyed entries, which is structural.
 - [ ] **Wire block/flow context back into `parse`** to raise the yaml
       reject-rate. The knowledge now exists in `semantic_view`; the validator
       does not use it. This is what the standing M3 gate actually needs.

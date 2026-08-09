@@ -70,6 +70,15 @@ pub enum SemanticNode {
     Mapping(Vec<(String, SemanticNode)>),
     /// Ordered items. Sequence order *is* meaning.
     Sequence(Vec<SemanticNode>),
+    /// A multi-document stream: `---` separated documents, in order.
+    ///
+    /// Distinct from [`Self::Sequence`] on purpose. Both index the same way, so
+    /// they could have shared a variant — but then a single document whose root
+    /// is a list would compare *equal in shape* to a two-document file, and a
+    /// diff between them would pair document 0 against list item 0. Those are
+    /// different things, and a path is an identity (ADR-011). The separate
+    /// variant makes the mismatch a replacement instead of a silent alignment.
+    Stream(Vec<SemanticNode>),
 }
 
 impl SemanticNode {
@@ -83,6 +92,7 @@ impl SemanticNode {
             // unreadable, and the interesting change is always deeper.
             Self::Mapping(pairs) => format!("{{{} keys}}", pairs.len()),
             Self::Sequence(items) => format!("[{} items]", items.len()),
+            Self::Stream(docs) => format!("<{} documents>", docs.len()),
         }
     }
 
@@ -99,7 +109,7 @@ impl SemanticNode {
                             .is_some_and(|(_, v)| value.same_value(v))
                     })
             }
-            (Self::Sequence(a), Self::Sequence(b)) => {
+            (Self::Sequence(a), Self::Sequence(b)) | (Self::Stream(a), Self::Stream(b)) => {
                 a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.same_value(y))
             }
             _ => false,
@@ -280,6 +290,8 @@ enum Line<'a> {
     },
     /// Blank, or nothing but a comment.
     Blank,
+    /// `---` or `...` — a document boundary, meaningful only at the top level.
+    Marker,
 }
 
 /// Build the semantic view of a YAML tree.
@@ -290,8 +302,63 @@ enum Line<'a> {
 /// documents, flow collections, anchors and aliases, tags, block scalars, and
 /// Go templates. Each is a refusal rather than a guess.
 pub(crate) fn yaml_view(cst: &Cst) -> Result<SemanticNode, Unmodelled> {
+    use crate::yaml::kind;
+
     let lines = child_lines(cst.root());
-    node_from_lines(&lines)
+
+    // Split the top level on `---` and `...`. Markers only mean anything here;
+    // `node_from_lines` refuses one found deeper, where it cannot.
+    let mut documents: Vec<Vec<&GreenNode>> = vec![Vec::new()];
+    let mut saw_marker = false;
+    for line in lines {
+        let is_marker = line.children().iter().any(|child| match child {
+            GreenChild::Token(token) => {
+                matches!(token.kind(), kind::DOC_START | kind::DOC_END)
+            }
+            GreenChild::Node(_) => false,
+        });
+        if is_marker {
+            saw_marker = true;
+            // A marker line can still own nested lines, because indentation
+            // parents them to it. They belong to the document it opens.
+            documents.push(child_lines(line));
+            continue;
+        }
+        if let Some(current) = documents.last_mut() {
+            current.push(line);
+        }
+    }
+
+    if !saw_marker {
+        let single = documents.first().cloned().unwrap_or_default();
+        return node_from_lines(&single);
+    }
+
+    // Empty segments are real: `---` at the top of a file opens the first
+    // document and leaves nothing before it. Dropping those keeps document
+    // indices matching what a reader counts.
+    let mut built = Vec::new();
+    for document in &documents {
+        if document.is_empty() {
+            continue;
+        }
+        built.push(node_from_lines(document)?);
+    }
+
+    // One document with explicit markers is still one document. Wrapping it
+    // would make `---\na: 1` and `a: 1` compare as different shapes, which is
+    // a formatting difference reported as a structural one.
+    match built.len() {
+        0 => Ok(SemanticNode::Scalar(Scalar {
+            text: String::new(),
+            value: String::new(),
+        })),
+        1 => built
+            .into_iter()
+            .next()
+            .ok_or_else(|| unmodelled("a document vanished between counting and taking it")),
+        _ => Ok(SemanticNode::Stream(built)),
+    }
 }
 
 /// The `LINE` children of a node that carry meaning, in source order.
@@ -383,9 +450,7 @@ fn classify(line: &GreenNode) -> Result<Line<'_>, Unmodelled> {
         // Everything below is a construct whose meaning this layer does not
         // model. Naming them individually costs nothing and makes the refusal
         // message tell the user what to do about it.
-        kind::DOC_START | kind::DOC_END => Err(unmodelled(
-            "multi-document streams are not modelled yet (M2)",
-        )),
+        kind::DOC_START | kind::DOC_END => Ok(Line::Marker),
         kind::DIRECTIVE => Err(unmodelled("directives are not modelled yet (M2)")),
         kind::ANCHOR | kind::ALIAS => {
             Err(unmodelled("anchors and aliases are not modelled yet (M2)"))
@@ -660,6 +725,12 @@ fn node_from_lines(lines: &[&GreenNode]) -> Result<SemanticNode, Unmodelled> {
         index += 1;
         match classify(line)? {
             Line::Blank => {}
+            // A boundary inside a collection is not a boundary, it is a
+            // document marker somewhere it cannot mean anything. Refusing beats
+            // guessing which side of it the surrounding keys belong to.
+            Line::Marker => {
+                return Err(unmodelled("a document marker indented inside a collection"));
+            }
             Line::Item { rest } => items.push(item_value(&rest, &nested)?),
             Line::Entry { key, value } => {
                 // A zero-indented sequence: `items:` with `- a` beneath it at
@@ -908,7 +979,6 @@ mod tests {
             ("a: {\n  x: 1}\n", "several lines"),
             ("a: &x 1\n", "anchors and aliases"),
             ("a: !!str 1\n", "tags"),
-            ("---\na: 1\n", "multi-document"),
         ] {
             let reason = yaml_refusal(src);
             assert!(
@@ -1021,6 +1091,44 @@ mod tests {
         };
         assert_eq!(at_end.text, "|\n  echo one\n");
         assert_eq!(in_mid.text, "|\n  echo one");
+    }
+
+    #[test]
+    fn two_documents_become_a_stream() {
+        let SemanticNode::Stream(docs) = yaml_view("kind: Service\n---\nkind: Deployment\n") else {
+            panic!("expected a stream");
+        };
+        assert_eq!(docs.len(), 2);
+    }
+
+    #[test]
+    fn one_document_with_markers_is_still_one_document() {
+        // `---` at the top is a marker, not a second document. Wrapping it
+        // would make this compare as a different *shape* from the same file
+        // without the marker — a formatting difference reported as structural.
+        assert!(yaml_view("---\na: 1\n").same_value(&yaml_view("a: 1\n")));
+        assert!(yaml_view("a: 1\n...\n").same_value(&yaml_view("a: 1\n")));
+    }
+
+    #[test]
+    fn a_stream_never_aligns_against_a_plain_sequence() {
+        // The reason Stream is its own variant. Two documents and one document
+        // that happens to be a two-item list index identically and mean
+        // entirely different things; pairing them would diff document 0
+        // against list item 0 and report the difference as ordinary edits.
+        let stream = yaml_view("a: 1\n---\nb: 2\n");
+        let sequence = yaml_view("- a: 1\n- b: 2\n");
+        assert!(matches!(stream, SemanticNode::Stream(_)));
+        assert!(matches!(sequence, SemanticNode::Sequence(_)));
+        assert!(!stream.same_value(&sequence));
+    }
+
+    #[test]
+    fn a_document_marker_indented_inside_a_collection_is_refused() {
+        // A marker somewhere it cannot mean anything. Guessing which side of it
+        // the surrounding keys belong to is exactly the invention ADR-012 bans.
+        let reason = yaml_refusal("a:\n  ---\n  b: 1\n");
+        assert!(reason.contains("document marker"), "got {reason:?}");
     }
 
     #[test]

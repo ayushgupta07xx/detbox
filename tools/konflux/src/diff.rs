@@ -251,7 +251,14 @@ fn walk(path: &str, a: &SemanticNode, b: &SemanticNode, out: &mut Vec<Change>) {
             });
         }
         (SemanticNode::Mapping(x), SemanticNode::Mapping(y)) => walk_mapping(path, x, y, out),
-        (SemanticNode::Sequence(x), SemanticNode::Sequence(y)) => walk_sequence(path, x, y, out),
+        // A stream aligns exactly like a sequence — documents are ordered and
+        // indexed. The or-pattern still requires both sides to be the *same*
+        // variant, so a Stream never pairs with a Sequence: one document that
+        // is a two-item list and a two-document file index identically and
+        // mean different things, and that mismatch falls to the replacement
+        // arm below rather than being diffed item against document.
+        (SemanticNode::Sequence(x), SemanticNode::Sequence(y))
+        | (SemanticNode::Stream(x), SemanticNode::Stream(y)) => walk_sequence(path, x, y, out),
         // A mapping where a sequence was is not two edits, it is one
         // replacement, and describing it as anything finer would be invention.
         _ => out.push(Change {

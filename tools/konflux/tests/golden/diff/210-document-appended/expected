@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "changes": [
+    {
+      "path": "/2",
+      "kind": "added",
+      "significance": "semantic",
+      "after": "{1 keys}"
+    }
+  ]
+}
