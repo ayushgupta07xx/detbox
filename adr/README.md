@@ -32,12 +32,13 @@ because 001 was held open for it.
 | [004](ADR-004-corpus-by-pinned-fetch.md) | Corpora are fetched at pinned SHAs with exact yields, never vendored | accepted |
 | [005](ADR-005-determinism-gate-mechanism.md) | Determinism = double-build + double-run output-hash compare, with an in-repo SHA-256 | accepted |
 | [006](ADR-006-benchmark-baselines.md) | Benchmark baselines are named-and-uncalibrated until recorded on CI | accepted |
-| [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | accepted |
+| [007](ADR-007-no-brand-named-artifacts.md) | No brand-named crate or binary exists until D1 | accepted · discharged by 015 |
 | [008](ADR-008-conformance-semantics.md) | Conformance: reject invalid *structure*, and two rates instead of one | accepted |
 | [009](ADR-009-publishing-conformance-rates.md) | Conformance rates are published as a generated file CI regenerates and byte-compares | accepted |
 | [010](ADR-010-flagship-is-konflux.md) | konflux is the flagship (D3), decided without the validation signal | accepted |
 | [011](ADR-011-diff-golden-contract.md) | The diff golden is the `--json` output, and it lands red-but-recorded | accepted |
 | [012](ADR-012-refusal-is-a-result.md) | A format with no semantic view is refused, never answered | accepted |
 | [013](ADR-013-semantic-coverage-is-measured.md) | YAML's semantic view, and publishing how much of the corpus it models | accepted |
+| [015](ADR-015-brand-is-inviolate.md) | The umbrella brand is `inviolate`, the multicall binary is `invio` | proposed |
 | [016](ADR-016-cli-surface-and-exit-codes.md) | The CLI has no argument-parsing dependency, and the exit code tracks meaning | proposed |
 | [017](ADR-017-differential-against-ground-truth.md) | The differential runs against ground truth, not against diff3 | proposed |

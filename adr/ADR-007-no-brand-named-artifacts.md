@@ -51,3 +51,17 @@ symlinked per-tool names.
 
 None directly. Protects the §16 decision boundary and keeps §9.3's "every public
 API change is a human review point" from being pre-empted by a placeholder.
+
+---
+
+## Discharged 2026-08-09
+
+D1 is made — the brand is `inviolate` and the multicall binary is `invio`
+(ADR-015) — so the freeze this ADR imposed lifts on its own terms rather than
+being overridden.
+
+One half of it deliberately continues: **no multicall binary crate exists yet.**
+§11 puts the install one-liner at konflux M4, and a crate created only to hold a
+reserved name would be exactly the placeholder artifact this ADR was written to
+prevent. Having a name is not a reason to build the thing it names.
+
