@@ -681,7 +681,10 @@ fn check_flow_collections(lexed: &Lexed, input: &[u8], diagnostics: &mut Vec<Dia
 
     for token in &lexed.tokens {
         match token.kind {
-            kind::SPACE | kind::INDENT | kind::COMMENT => {}
+            // Layout, and node properties. Neither consumes the value
+            // position: `{&a [x]: y}` is still a sequence key, and an indent
+            // before `[` does not stop it opening a collection.
+            kind::SPACE | kind::INDENT | kind::COMMENT | kind::ANCHOR | kind::TAG => {}
             // A newline at block level starts a fresh value position, so a line
             // beginning `[` opens a real flow sequence. Inside a collection it
             // means nothing — flow spans lines by design.
@@ -781,10 +784,6 @@ fn check_flow_collections(lexed: &Lexed, input: &[u8], diagnostics: &mut Vec<Dia
             // `[ , a ]` never reached the comma rule at all.
             kind::DOC_START | kind::DOC_END => previous = None,
             kind::COLON => previous = Some(b':'),
-            // An anchor or a tag decorates the node that follows without
-            // consuming the value position: `{&a [x]: y}` is still a sequence
-            // key. Leaving `previous` alone is what keeps that true.
-            kind::ANCHOR | kind::TAG => {}
             _ => previous = Some(b'v'),
         }
     }
