@@ -22,6 +22,17 @@
 # `check_yaml_directive` for case 260's two directive lines. The first draft cost
 # 290 — a Vec per line and another for the whole token stream — and this gate is
 # what surfaced that.
+# yaml 3132 -> 3134 on 2026-08-09: flow-context validation. Two allocations
+# across 37 golden cases, and they are the two cases that actually contain a
+# flow collection — `Vec::new()` does not allocate until something is pushed, so
+# a document with no `[` or `{` pays nothing at all. JSON is unchanged at 2261,
+# which is the check: these rules are YAML-only and a JSON movement would have
+# meant one had leaked.
+#
+# Not avoidable by being cleverer. Tracking bracket nesting needs a stack, and a
+# fixed-size array would trade an allocation for a depth limit on valid input —
+# the wrong direction, since refusing a deeply-nested valid document is the
+# error this parser keeps deciding not to make.
 # format	cases	allocations	bytes
 json	18	2261	103550
-yaml	37	3132	125704
+yaml	37	3134	125800
