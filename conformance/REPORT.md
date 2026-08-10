@@ -24,7 +24,7 @@ nothing at all.
 | Suite | Pinned rev | Must-accept | Must-reject | Implementation-defined |
 |---|---|---|---|---|
 | json-test-suite | `1ef36fa01286` | 95/95 · 100.0% | 188/188 · 100.0% | 22/35 accepted |
-| yaml-test-suite | `6ad3d2c62885` | 308/308 · 100.0% | 17/94 · 18.1% | none in suite |
+| yaml-test-suite | `6ad3d2c62885` | 308/308 · 100.0% | 23/94 · 24.5% | none in suite |
 
 ## Badge values
 
@@ -37,7 +37,7 @@ measured. Their visual form is Ayush's (§16) and lands with the launch README.
 | json-test-suite accept | 100.0% (95/95) |
 | json-test-suite reject | 100.0% (188/188) |
 | yaml-test-suite accept | 100.0% (308/308) |
-| yaml-test-suite reject | 18.1% (17/94) |
+| yaml-test-suite reject | 24.5% (23/94) |
 
 ## json-test-suite
 
@@ -80,9 +80,9 @@ Pinned at `6ad3d2c62885d82fc349026c136ef560838fdf3d` · https://github.com/yaml/
 | Class | Correct | Rate |
 |---|---|---|
 | must-accept | 308/308 | 100.0% |
-| must-reject | 17/94 | 18.1% |
+| must-reject | 23/94 | 24.5% |
 
-### Honest failure list — 77 of 402 cases
+### Honest failure list — 71 of 402 cases
 
 All of them are must-reject cases this implementation accepts: input the
 suite calls invalid that our parser does not yet recognise as invalid. None
@@ -96,12 +96,10 @@ file is one konflux cannot help with at all.
 4H7K [must-reject, accepted]  Flow sequence with invalid extra closing bracket
 4HVU [must-reject, accepted]  Wrong indendation in Sequence
 4JVG [must-reject, accepted]  Scalar value with two anchors
-55WF [must-reject, accepted]  Invalid escape in double quoted string
 5LLU [must-reject, accepted]  Block scalar with wrong indented line after spaces only
 5TRB [must-reject, accepted]  Invalid document-start marker in doublequoted tring
 5U3A [must-reject, accepted]  Sequence on same Line as Mapping Key
 62EZ [must-reject, accepted]  Invalid block mapping key on same line as previous key
-6JTT [must-reject, accepted]  Flow sequence without closing bracket
 6S55 [must-reject, accepted]  Invalid scalar at the end of sequence
 7LBH [must-reject, accepted]  Multiline double quoted implicit keys
 7MNF [must-reject, accepted]  Missing colon
@@ -110,14 +108,12 @@ file is one konflux cannot help with at all.
 9CWY [must-reject, accepted]  Invalid scalar at the end of mapping
 9HCY [must-reject, accepted]  Need document footer before directives
 9KBC [must-reject, accepted]  Mapping starting at --- line
-9MAG [must-reject, accepted]  Flow sequence with invalid comma at the beginning
 9MQT/01 [must-reject, accepted]  Scalar doc with '...' in content
 BD7L [must-reject, accepted]  Invalid mapping after sequence
 BF9H [must-reject, accepted]  Trailing comment in multiline plain scalar
 BS4K [must-reject, accepted]  Comment between plain scalar lines
 C2SP [must-reject, accepted]  Flow Mapping Key on two lines
 CML9 [must-reject, accepted]  Missing comma in flow
-CTN5 [must-reject, accepted]  Flow sequence with invalid extra comma
 CXX2 [must-reject, accepted]  Mapping with anchor on document start line
 D49Q [must-reject, accepted]  Multiline single quoted implicit keys
 DK4H [must-reject, accepted]  Implicit key followed by newline
@@ -132,7 +128,6 @@ G9HC [must-reject, accepted]  Invalid anchor in zero indented sequence
 GDY7 [must-reject, accepted]  Comment that looks like a mapping key
 GT5M [must-reject, accepted]  Node anchor in sequence
 H7J7 [must-reject, accepted]  Node anchor not indented
-HRE5 [must-reject, accepted]  Double quoted scalar with escaped single quote
 HU3P [must-reject, accepted]  Invalid Mapping in plain scalar
 JKF3 [must-reject, accepted]  Multiline unidented double quoted block key
 JY7Z [must-reject, accepted]  Trailing content that looks like a mapping
@@ -140,7 +135,6 @@ KS4U [must-reject, accepted]  Invalid item after end of flow sequence
 LHL4 [must-reject, accepted]  Invalid tag
 MUS6/01 [must-reject, accepted]  Directive variants
 N4JP [must-reject, accepted]  Bad indentation in mapping
-N782 [must-reject, accepted]  Invalid document markers in flow style
 P2EQ [must-reject, accepted]  Invalid sequene item on same line as previous item
 Q4CL [must-reject, accepted]  Trailing content after quoted value
 QB6E [must-reject, accepted]  Wrong indented multiline quoted scalar

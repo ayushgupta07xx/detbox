@@ -657,7 +657,208 @@ pub fn validate(lexed: &Lexed, input: &[u8]) -> Vec<Diagnostic> {
     check_comments(lexed, input, &mut diagnostics);
     check_anchors(lexed, &mut diagnostics);
     check_document_structure(lexed, input, &mut diagnostics);
+    check_flow_collections(lexed, input, &mut diagnostics);
+    check_double_quoted_escapes(lexed, input, &mut diagnostics);
     diagnostics
+}
+
+/// Flow collections: `[a, b]` and `{k: v}`.
+///
+/// This is the "flow context tracking" the M3 gate has been waiting on since
+/// M1. Every rule here is decidable from the token stream alone — a bracket is
+/// open or it is not — which is what makes them safe to apply. Indentation
+/// rules are the harder half and are deliberately not attempted here.
+///
+/// The accept-rate ratchet pinned at 1.0 is the guard: a rule that rejects one
+/// valid document out of yaml-test-suite's 308 fails the build. Rejecting valid
+/// input is the worse error, because a refused file is one konflux cannot help
+/// with at all — the reason the M1 tab rule was reverted.
+fn check_flow_collections(lexed: &Lexed, input: &[u8], diagnostics: &mut Vec<Diagnostic>) {
+    let mut open: Vec<(u8, Span)> = Vec::new();
+    // What the previous meaningful token was, so "a comma with nothing before
+    // it" and "two values with no comma between them" are both answerable.
+    let mut previous: Option<u8> = None;
+
+    for token in &lexed.tokens {
+        match token.kind {
+            kind::SPACE | kind::INDENT | kind::COMMENT => {}
+            // A newline at block level starts a fresh value position, so a line
+            // beginning `[` opens a real flow sequence. Inside a collection it
+            // means nothing — flow spans lines by design.
+            kind::NEWLINE => {
+                if open.is_empty() {
+                    previous = None;
+                }
+            }
+            kind::DOC_START | kind::DOC_END if !open.is_empty() => {
+                diagnostics.push(Diagnostic::new(
+                    token.span,
+                    "a document marker cannot appear inside a flow collection",
+                ));
+                return;
+            }
+            kind::FLOW_PUNCT => {
+                let byte = text_of(input, *token).first().copied().unwrap_or(b' ');
+                match byte {
+                    // A bracket only OPENS a collection at a value position.
+                    // yaml-test-suite case 2EBW has a key made of every allowed
+                    // punctuation character — `a!"#$%&'()*+,-./09:;<=>?@AZ[\]^_`
+                    // — and the lexer emits FLOW_PUNCT for those bytes wherever
+                    // they land. Treating one mid-scalar as an opener refuses a
+                    // valid document. This is the same rule M1 already had to
+                    // learn for quotes, for the same reason.
+                    b'[' | b'{'
+                        if matches!(previous, None | Some(b':' | b'-' | b',' | b'[' | b'{')) =>
+                    {
+                        open.push((byte, token.span));
+                        previous = Some(byte);
+                    }
+                    b'[' | b'{' => previous = Some(b'v'),
+                    // A closer with nothing open is content, not a stray
+                    // bracket: case 2EBW's key legitimately contains `]`.
+                    //
+                    // A rule was TRIED and REVERTED here: treating a closer at
+                    // a value position as an error caught 4H7K and one other,
+                    // and refused two valid documents. Rejecting valid input is
+                    // the worse error — a refused file is one konflux cannot
+                    // help with at all — and this is the second time that trade
+                    // has come up, the first being M1's tab rule.
+                    b']' | b'}' if open.is_empty() => previous = Some(b'v'),
+                    b']' | b'}' => {
+                        let wanted = if byte == b']' { b'[' } else { b'{' };
+                        match open.pop() {
+                            Some((opener, _)) if opener == wanted => {}
+                            Some(_) => {
+                                diagnostics.push(Diagnostic::new(
+                                    token.span,
+                                    "flow collection closed by the wrong bracket",
+                                ));
+                                return;
+                            }
+                            None => {
+                                diagnostics.push(Diagnostic::new(
+                                    token.span,
+                                    "flow collection closed but never opened",
+                                ));
+                                return;
+                            }
+                        }
+                        previous = Some(byte);
+                    }
+                    b',' => {
+                        if open.is_empty() {
+                            // A comma in plain content is a character.
+                            previous = Some(b'v');
+                            continue;
+                        }
+                        // `[,a]` and `[a,,b]`: a separator needs something to
+                        // separate on both sides.
+                        if matches!(previous, Some(b'[' | b'{' | b',')) {
+                            diagnostics.push(Diagnostic::new(
+                                token.span,
+                                "flow collection has a comma with no entry before it",
+                            ));
+                            return;
+                        }
+                        previous = Some(b',');
+                    }
+                    _ => previous = Some(byte),
+                }
+            }
+            kind::DASH if !open.is_empty() => {
+                diagnostics.push(Diagnostic::new(
+                    token.span,
+                    "a block sequence dash cannot appear inside a flow collection",
+                ));
+                return;
+            }
+            // A colon opens a value position, so `{a: [b]}` has a real flow
+            // sequence after it. Recording it as a generic value refused three
+            // valid documents — SBG9, X38W and ZK9H — all of them nested flow.
+            // A document marker outside a collection begins a new document,
+            // which is the most value-position a position can be. Recording it
+            // as generic content hid twelve flow cases behind it: `---` then
+            // `[ , a ]` never reached the comma rule at all.
+            kind::DOC_START | kind::DOC_END => previous = None,
+            kind::COLON => previous = Some(b':'),
+            // An anchor or a tag decorates the node that follows without
+            // consuming the value position: `{&a [x]: y}` is still a sequence
+            // key. Leaving `previous` alone is what keeps that true.
+            kind::ANCHOR | kind::TAG => {}
+            _ => previous = Some(b'v'),
+        }
+    }
+
+    if let Some((_, span)) = open.first() {
+        diagnostics.push(Diagnostic::new(
+            *span,
+            "flow collection is opened and never closed",
+        ));
+    }
+}
+
+/// Escape sequences in a double-quoted scalar, per YAML 1.2 §7.3.1.
+///
+/// A closed set, so anything outside it is unambiguously an error and no
+/// context is needed — which is what makes this safe at the token level.
+///
+/// The newline is the one that is easy to miss: `\` at end of line is YAML's
+/// line continuation, and omitting it refused case 565N, a perfectly valid
+/// base64 blob folded across six lines.
+fn check_double_quoted_escapes(lexed: &Lexed, input: &[u8], diagnostics: &mut Vec<Diagnostic>) {
+    fn defined(byte: u8) -> bool {
+        matches!(
+            byte,
+            b'0' | b'a'
+                | b'b'
+                | b't'
+                | b'n'
+                | b'v'
+                | b'f'
+                | b'r'
+                | b'e'
+                | b' '
+                | b'"'
+                | b'/'
+                | b'\\'
+                | b'N'
+                | b'_'
+                | b'L'
+                | b'P'
+                | b'x'
+                | b'u'
+                | b'U'
+                | b'\t'
+                // Line continuation: `\` then the end of the line.
+                | b'\n'
+                | b'\r'
+        )
+    }
+
+    for token in &lexed.tokens {
+        if token.kind != kind::DOUBLE_QUOTED {
+            continue;
+        }
+        let text = text_of(input, *token);
+        let mut index = 0usize;
+        while let Some(&byte) = text.get(index) {
+            if byte != b'\\' {
+                index += 1;
+                continue;
+            }
+            match text.get(index + 1) {
+                Some(&next) if defined(next) => index += 2,
+                Some(_) => {
+                    diagnostics.push(Diagnostic::new(
+                        token.span,
+                        "double-quoted scalar has an escape YAML does not define",
+                    ));
+                    return;
+                }
+                None => index += 1,
+            }
+        }
+    }
 }
 
 fn text_of(input: &[u8], token: Token) -> &[u8] {
@@ -1173,6 +1374,66 @@ mod tests {
         ] {
             assert!(round_trips(case), "K1 violated for {case:?}");
         }
+    }
+
+    #[test]
+    fn flow_collections_must_balance() {
+        for invalid in ["---\n[ [ a, b, c ]\n", "---\n{ a: 1\n", "---\n[ a } \n"] {
+            assert!(parse(invalid.as_bytes()).is_err(), "accepted {invalid:?}");
+        }
+    }
+
+    #[test]
+    fn a_comma_needs_something_to_separate() {
+        for invalid in ["---\n[ , a, b ]\n", "---\n[ a, , b ]\n"] {
+            assert!(parse(invalid.as_bytes()).is_err(), "accepted {invalid:?}");
+        }
+    }
+
+    #[test]
+    fn block_structure_cannot_appear_inside_a_flow_collection() {
+        for invalid in ["---\n[ - a ]\n", "---\n[ a,\n--- \n]\n"] {
+            assert!(parse(invalid.as_bytes()).is_err(), "accepted {invalid:?}");
+        }
+    }
+
+    #[test]
+    fn brackets_inside_a_plain_scalar_are_characters_not_indicators() {
+        // yaml-test-suite 2EBW. A key may contain every ASCII punctuation
+        // character, and the lexer emits FLOW_PUNCT for those bytes wherever
+        // they land. An earlier draft read one as an opener and refused this.
+        let valid = "a!\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~: safe\n";
+        assert!(parse(valid.as_bytes()).is_ok(), "refused a valid key");
+    }
+
+    #[test]
+    fn nested_flow_after_a_colon_or_an_anchor_still_opens() {
+        // SBG9, ZK9H and X38W. A colon opens a value position and an anchor
+        // decorates the node without consuming it; getting either wrong
+        // refuses ordinary nested flow.
+        for valid in [
+            "{a: [b, c], [d, e]: f}\n",
+            "{ key: [[[\n  value\n ]]]\n}\n",
+            "{ &a [a, &b b]: *b, *a : [c, *b, d]}\n",
+        ] {
+            assert!(parse(valid.as_bytes()).is_ok(), "refused {valid:?}");
+        }
+    }
+
+    #[test]
+    fn a_line_continuation_is_a_defined_escape() {
+        // Case 565N: a base64 blob folded across lines with `\` at each end.
+        // Omitting the newline from the escape set refused it.
+        let valid = "canonical: !!binary \"\\\n  R0lGODlh\"\n";
+        assert!(parse(valid.as_bytes()).is_ok(), "refused a folded scalar");
+    }
+
+    #[test]
+    fn an_undefined_double_quoted_escape_is_rejected() {
+        assert!(
+            parse(b"a: \"\\q\"\n").is_err(),
+            "accepted an undefined escape"
+        );
     }
 
     #[test]

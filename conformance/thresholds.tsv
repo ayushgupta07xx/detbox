@@ -33,12 +33,19 @@ json-test-suite    reject  1.0
 #
 #   accept 1.0  — every valid document in the suite is accepted, which is what
 #                 K1 and konflux's usefulness depend on.
-#   reject      — raised from 1.1% to 18.1% on 2026-08-09 by four families of
-#                 rule: block scalar indicators, comment separation, anchor
-#                 placement, and directive/document-marker structure. Each is
-#                 unambiguous from the token stream. The rest of yaml-test-suite's
-#                 must-reject cases need block/flow context tracking, which
-#                 arrives with semantic_view at M2.
+#   reject      — 1.1% -> 18.1% (2026-08-09) by four families of rule: block
+#                 scalar indicators, comment separation, anchor placement, and
+#                 directive/document-marker structure.
+#               — 18.1% -> 24.5% (2026-08-09) by FLOW CONTEXT tracking, which is
+#                 what the M3 gate had been waiting on: bracket balance, commas
+#                 with nothing to separate, block dashes and document markers
+#                 inside a collection, and undefined double-quoted escapes.
+#
+# A rule was tried and reverted on the way, for the second time in this file's
+# history: treating a closing bracket at a value position as a stray bracket
+# caught two more must-reject cases and refused two valid documents. Rejecting
+# valid input is the worse error. The accept ratchet at 1.0 is what caught it,
+# twice — once at 97.4% and once at 99.4%.
 #
 # A tab-indentation rule was tried and removed: it rejected 12 documents the
 # suite calls valid. Rejecting valid input is the worse error — a refused file is
@@ -48,4 +55,4 @@ json-test-suite    reject  1.0
 # Structurally merging a document we failed to recognise as invalid is precisely
 # the "silently wrong" failure §0 ranks first. Recorded in MILESTONES.
 yaml-test-suite    accept  1.0
-yaml-test-suite    reject  0.18
+yaml-test-suite    reject  0.24
