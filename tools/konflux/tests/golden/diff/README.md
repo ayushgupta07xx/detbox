@@ -33,6 +33,8 @@ it points somewhere unhelpful.
 | `181-block-scalar-followed-by-a-key` | one line changed | `changed` · semantic at `/script` — same content, and the body does **not** own the newline because a line follows |
 | `200-multi-document-value-changed` | one line changed | `changed` · semantic at `/1/replicas` — the document index leads the path |
 | `210-document-appended` | three lines added | one `added` · semantic at `/2` — a whole document, not its keys |
+| `300-helm-condition-changed` | one line changed | `changed` · semantic at `""` — a template line, reported at the collection it guards |
+| `310-helm-template-value-changed` | one line changed | `changed` · semantic at `/name` — a template *as a value* is just a scalar |
 | `900-identical` | nothing | nothing — **the control**, see below |
 
 **`010` against `130` is the pair that matters most.** Both reorder a
@@ -46,10 +48,10 @@ invents conflicts or loses changes.
 here on purpose: an oracle that no possible output satisfies is as broken as one
 everything satisfies, so the empty answer must be reachable and must be pinned.
 
-The other sixteen all fail a diff that reports nothing, including the three
+The other eighteen all fail a diff that reports nothing, including the three
 formatting-only cases — which is why formatting changes are *reported* rather
 than left as an empty list. `the_suite_is_not_vacuous` asserts exactly this: it
-runs a null diff over the suite and requires 16 of 17 cases to fail. If someone
+runs a null diff over the suite and requires 18 of 19 cases to fail. If someone
 later makes formatting changes silent, that test goes red rather than the suite
 quietly becoming satisfiable by returning `[]`.
 

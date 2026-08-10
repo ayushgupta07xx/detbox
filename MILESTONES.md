@@ -32,31 +32,18 @@ YAML (ADR-012, ADR-013) have all landed. `UNIMPLEMENTED_CASES` reached zero and
 the ratchet came out, exactly as ADR-011 said it would.
 
 **Coverage is the number that matters, not the golden count.** `cargo xtask
-semantic-coverage` measures the corpus: **YAML 485/750 (64.7%)**, JSON 250/250,
-**total 73.5%**. What is left:
+semantic-coverage` measures the corpus: **YAML 537/750 (71.6%)**, JSON 250/250,
+**total 78.7%** — three files short of 72.1% because ADR-017's duplicate-key
+refusal landed alongside. What is left is a long tail of ordinary YAML gaps, no single
+one of them large:
 
 | Files | Not modelled yet |
 |---:|---|
-| 145 | **Helm templates** — see below, a design question before a coding one |
-| 39 | mapping entries and sequence items at the same level |
-| 25 | a value of several tokens (anchor, tag) |
-| 21 | a sequence item mixing a mapping entry with non-entry lines |
+| 68 | a value of several tokens (anchor, tag, or a template beside literal text) |
+| 47 | mapping entries and sequence items at the same level |
+| 32 | a sequence item mixing a mapping entry with non-entry lines |
+| 26 | a template line owning indented lines |
 | 18 | a flow collection that does not start the value |
-
-**Helm templates are the last large bucket and they need a decision, not code.**
-`{{- if .Values.rbac.create -}}` is control flow: it decides whether the rest of
-the document exists. Three readings, none obviously right:
-
-1. **Keep refusing.** Safe; konflux stays unusable on a fifth of real charts.
-2. **Opaque nodes compared by source text.** Diffs work, but a template that
-   *moves* reads as a change to whatever it lands beside — and it needs
-   `Mapping` to hold unkeyed entries, which is a structural change.
-3. **Model conditionals as structure.** Correct, and much larger — arguably a
-   chart-aware layer rather than a YAML one.
-
-Ignoring template lines is not on the list: two charts differing only in their
-condition would diff as identical, which is the silently-wrong failure §0 ranks
-first.
 
 **Correction to the previous handoff.** It said `semantic_view` would close the
 yaml reject-rate gate. **It does not.** That gate is about `parse` refusing
@@ -658,9 +645,24 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - A marker indented inside a collection is refused: there is no answer to
         which side of it the surrounding keys belong to.
       - Coverage **57.2% → 64.7%** for YAML, **73.5%** overall.
-- [ ] **Helm templates** (145) — the last large bucket. A design decision first;
-      the three readings are in the handoff above and option 2 needs `Mapping`
-      to hold unkeyed entries, which is structural.
+- [x] **Helm templates** — option 2, chosen by Ayush. `{{- if }}` lines are
+      carried beside the data as opaque, ordered text. → **ADR-014**.
+      - Coverage **64.7% → 72.1%** for YAML, **79.1%** overall; the largest
+        bucket in the queue disappears.
+      - **Templates are an ordered list, never matched by text.** Charts hold
+        two identical `{{- end }}` lines routinely, and matching by text would
+        let one be deleted with nothing noticing — which changes what the chart
+        renders. A test asserts exactly that.
+      - Reported at the **collection's** path, not a path of their own: a
+        template has no key and no index a reader could point at that would not
+        collide with a real key. `--json` stays at schema version 1.
+      - *Found by probing rather than assumed:* templates used as **values**
+        already worked — a template is a single `VERBATIM` token, so it resolved
+        like any scalar. Case `310` pins it.
+      - **Honest limits, for the launch README:** konflux cannot tell you a key
+        is guarded by a condition, and a template that moves reads as a change
+        beside whatever it lands next to. Claiming it "understands Helm" would
+        be the overclaim §12 exists to prevent.
 - [ ] **Wire block/flow context back into `parse`** to raise the yaml
       reject-rate. The knowledge now exists in `semantic_view`; the validator
       does not use it. This is what the standing M3 gate actually needs.
