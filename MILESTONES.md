@@ -680,8 +680,37 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - Diffing `.yaml` against `.json` is a usage error, not a conversion —
         that is veritas's job (§4.5), and doing it quietly here would be a
         second product hiding inside the first.
-- [ ] Differential runner online: ours vs `diff3`/`git diff` on the corpus;
-      divergences triaged into golden cases, never ignored.
+- [x] **Differential runner online**, and `gate/differential` **armed** on
+      ADR-003's schedule. → **ADR-017**.
+      - *"Ours vs diff3" is ill-posed and was not implemented as written.* A
+        line differ and a structural differ do not compute the same function,
+        so there is no agreement set; §8's differential row says "yes on
+        agreement set" and here it would be empty. Instead: **ground truth we
+        construct**, which is stronger than a second tool because we know
+        exactly what changed, so silence is unambiguously a lost edit.
+      - Two properties over 640 corpus files: a file diffed against itself must
+        report nothing, and a known appended key must be noticed.
+      - **It found a real soundness bug on its first run.** A corpus Kubernetes
+        secret has `type:` twice; the diff matches entries by key, so the second
+        paired against the first and the file **reported a change against
+        itself**. In JSON it was worse — `{"a":"x","a":"y"}` versus itself
+        reported a *semantic* change and exited 1, so CI would fail on a file
+        diffed against its own copy.
+      - Fixed by refusing duplicate keys. Both specs already do (YAML 1.2 an
+        error, RFC 8259 "unpredictable"), so this reads the spec rather than
+        inventing a rule. Coverage 64.7% → **64.3%**: three files refused, which
+        is cheaper than being wrong about them.
+      - **It also found a bug in itself.** Eight "lost edits" were istio
+        manifests ending in `---`, where appending a key makes a *second
+        document* — a shape change konflux reported correctly. The runner was
+        blaming the tool for its own mutation. Every skip class is now printed,
+        because a runner that quietly narrows its corpus reports on a sample it
+        chose.
+      - *Scope, stated:* one probe is one property. This catches a lost
+        **addition**, not a lost modification or deletion. Those are further
+        mutations and are cheap to add.
+      - Mergiraf remains the real peer comparison and arrives at **M3**, where
+        §4.1 P3 asks for auto-resolution rates against it.
 - [ ] `NO_COLOR`, non-TTY, deterministic ordering (C1–C3).
 
 ### M3 — 3-way merge core + P2/P3 harness
