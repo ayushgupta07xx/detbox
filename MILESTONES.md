@@ -659,7 +659,27 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
 - [ ] **Wire block/flow context back into `parse`** to raise the yaml
       reject-rate. The knowledge now exists in `semantic_view`; the validator
       does not use it. This is what the standing M3 gate actually needs.
-- [ ] Side-by-side CLI output via `core-cli` — `--json` stable and schema-versioned.
+- [x] **A CLI, via `core-cli`** — `konflux diff a.yaml b.yaml`, `--json`,
+      `--check`. → **ADR-016**. The first runnable binary in the ecosystem;
+      everything before it was a library with a test suite.
+      - **The exit code tracks meaning, not bytes:** `0` no semantic change,
+        `1` semantic changes, `2` usage, `3` **refused**. A reordered-keys file
+        exits 0 — that is the product thesis as a number, and a line differ
+        cannot make the distinction.
+      - `3` is separate from `1` because **M4's merge driver must tell them
+        apart**: "these differ, resolve them" and "I cannot read this, hand it
+        back to git" demand opposite responses. Collapsing them would make the
+        driver take one side of a file it never understood.
+      - **No argument-parsing dependency.** `core-cli` is a leaf every tool
+        imports, and the flag surface is small on purpose. Shell completions
+        (§4.2, strukt) are the thing that would justify clap; not before.
+      - 14 CLI tests run the **real binary**, because a unit test on an enum
+        proves the numbers exist, not that the process returns them. Two matter
+        most in a script: a typo'd path exits `2` rather than reading as clean,
+        and piped output carries no ANSI.
+      - Diffing `.yaml` against `.json` is a usage error, not a conversion —
+        that is veritas's job (§4.5), and doing it quietly here would be a
+        second product hiding inside the first.
 - [ ] Differential runner online: ours vs `diff3`/`git diff` on the corpus;
       divergences triaged into golden cases, never ignored.
 - [ ] `NO_COLOR`, non-TTY, deterministic ordering (C1–C3).

@@ -39,3 +39,4 @@ because 001 was held open for it.
 | [011](ADR-011-diff-golden-contract.md) | The diff golden is the `--json` output, and it lands red-but-recorded | accepted |
 | [012](ADR-012-refusal-is-a-result.md) | A format with no semantic view is refused, never answered | accepted |
 | [013](ADR-013-semantic-coverage-is-measured.md) | YAML's semantic view, and publishing how much of the corpus it models | accepted |
+| [016](ADR-016-cli-surface-and-exit-codes.md) | The CLI has no argument-parsing dependency, and the exit code tracks meaning | proposed |

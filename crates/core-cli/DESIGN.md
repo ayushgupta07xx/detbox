@@ -12,7 +12,7 @@ exit codes, span-rich diagnostics, deterministic output ordering.
 | ID | Statement | How it is checked |
 |----|-----------|-------------------|
 | C1 | `--json` is append-only within a schema version | golden suite over serialised output |
-| C2 | Exit codes are a contract: 0 clean · 1 finding · 2 usage · >2 internal | CLI golden suite asserting codes |
+| C2 | Exit codes are a contract: 0 clean · 1 finding · 2 usage · **3 refused** · >3 internal | 14 CLI tests running the real binary (`tools/konflux/tests/cli.rs`) |
 | C3 | Nothing here reads clock, locale, unseeded randomness, or network | `clippy.toml` disallowed-methods + determinism gate |
 | C4 | Errors carry spans, not strings | type-level: the diagnostic type has no free-form-only constructor |
 
@@ -22,5 +22,14 @@ README explains why. No telemetry, no phone-home — permanently banned
 (Appendix C). Stated in every README (§10).
 
 ## Current milestone
-**Phase 0 — scaffold.** First real content at konflux M2 (diff output) and M4
-(`--check` CI mode).
+**konflux M2 — landed.** Exit-code policy, the shared flag surface, and colour
+discipline (ADR-016). No argument-parsing dependency: the surface is small on
+purpose and this crate is a leaf every tool imports.
+
+**C2 amended:** `3` is *refused* — the tool cannot model this input. It was
+previously folded into ">2 internal", which is wrong: a refusal is a boundary
+reported honestly, not a failure. M4's merge driver depends on telling it from
+`1`, because "these differ" and "I cannot read this" demand opposite responses.
+
+**Still outstanding: C4**, span-rich diagnostics. A refusal is currently a
+sentence, not a span.

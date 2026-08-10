@@ -12,6 +12,13 @@ publish.workspace = true
 # The kernel head konflux diffs and merges through. Explicit version on the path
 # dependency so cargo-deny does not read it as a wildcard requirement.
 core-formats = { path = "../../crates/core-formats", version = "0.0.0" }
+# The shared CLI law (§3.4): exit codes, flag surface, colour discipline. One
+# implementation so a user who learns one tool has learned all nine.
+core-cli = { path = "../../crates/core-cli", version = "0.0.0" }
+
+[[bin]]
+name = "konflux"
+path = "src/main.rs"
 
 [dev-dependencies]
 # The proof harness runs konflux's golden suites. A dev-dependency, not a
