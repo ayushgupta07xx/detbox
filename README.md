@@ -73,4 +73,9 @@ and macOS are release targets in the matrix.
 
 ## Licence
 
-MIT OR Apache-2.0 (final form pending D4).
+**MIT OR Apache-2.0**, at your option — [LICENSE-MIT](LICENSE-MIT) and
+[LICENSE-APACHE](LICENSE-APACHE). Decision **D4**, settled 2026-08-09.
+
+Unless you state otherwise, any contribution you intentionally submit for
+inclusion in this work is dual licensed as above, without additional terms or
+conditions.

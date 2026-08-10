@@ -25,6 +25,9 @@ core-formats = { path = "../crates/core-formats", version = "0.0.0" }
 # gate byte-compares this command's output, so two renderers would be two
 # answers to the same question.
 core-verify = { path = "../crates/core-verify", version = "0.0.0" }
+# `diff-differential` runs konflux's own diff over the corpus. The differential
+# oracle has to call the product, not a copy of it.
+konflux = { path = "../tools/konflux", version = "0.0.0" }
 
 [lints]
 workspace = true
