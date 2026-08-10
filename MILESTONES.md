@@ -91,7 +91,11 @@ a separately stated rationale — and that provenance is recorded in the ADR.
 per night and resets whenever `core-cst`, `core-formats` or the fuzz targets
 change. Roughly five weeks of a stationary parser.
 
-**Standing gate before M3.** The YAML reject-rate is 18.1%. The remaining 77
+**Standing gate before M3.** The YAML reject-rate is **24.5%**, raised from
+18.1% by the flow-context tracking this gate had been waiting on since M1.
+Still open — 71 must-reject cases remain, mostly indentation.
+
+Previously: The remaining 77
 must-reject cases need block/flow context tracking, which *is* `semantic_view`
 at M2 — and the published failure list now shows that directly: read the case
 titles in `REPORT.md` and they are almost all indentation, flow-collection and
@@ -661,7 +665,28 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
 - [ ] **Helm templates** (145) — the last large bucket. A design decision first;
       the three readings are in the handoff above and option 2 needs `Mapping`
       to hold unkeyed entries, which is structural.
-- [ ] **Wire block/flow context back into `parse`** to raise the yaml
+- [x] **Flow context wired into `parse`** — the yaml reject-rate gate moves for
+      the first time since M1: **18.1% → 24.5%**, accept held at 100%.
+      - Rules, all decidable from the token stream alone: bracket balance,
+        commas with nothing to separate, block dashes and document markers
+        inside a collection, and undefined double-quoted escapes.
+      - **The accept ratchet caught overreach twice**, which is the whole reason
+        it is pinned at 1.0. First at 97.4% — the lexer emits `FLOW_PUNCT` for
+        `[]{},` wherever those bytes land, so a key made of punctuation (case
+        2EBW) looked like it opened a collection. Fixed the way M1 fixed quotes:
+        a bracket only *opens* at a value position.
+      - Second at 99.4% — a colon and an anchor both open a value position, and
+        recording them as generic content refused three ordinary nested-flow
+        documents (SBG9, X38W, ZK9H).
+      - *A rule tried and reverted, for the second time in this gate's history:*
+        treating a closing bracket at a value position as a stray bracket caught
+        two more must-reject cases and **refused two valid documents**.
+        Rejecting valid input is the worse error — a refused file is one konflux
+        cannot help with at all — so it is gone, and the reason is in the code
+        where the next person will meet it.
+      - What is left is mostly **indentation** (wrong indent in map/sequence),
+        which needs more than token-level context.
+- [ ] **Indentation validation** — the largest remaining reject-rate family. to raise the yaml
       reject-rate. The knowledge now exists in `semantic_view`; the validator
       does not use it. This is what the standing M3 gate actually needs.
 - [x] **A CLI, via `core-cli`** — `konflux diff a.yaml b.yaml`, `--json`,
