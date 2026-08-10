@@ -117,6 +117,44 @@ impl SemanticNode {
     }
 }
 
+/// Refuse a document whose mapping has the same key twice.
+///
+/// Both specs already do: YAML 1.2 calls duplicate keys an error, and RFC 8259
+/// says the behaviour of an object with repeated names is unpredictable. Our
+/// parsers accept them anyway — that is K1 doing its job, preserving bytes it
+/// does not endorse — so the refusal belongs here, at the layer that claims to
+/// know what a document *means*.
+///
+/// It is not a nicety. A diff matches mapping entries by key, so with two `a`
+/// entries the second pairs against the first, and a file compared **against
+/// itself** reports a change. That was found by the differential runner on its
+/// first pass over the corpus, on a real Kubernetes secret with `type:` twice,
+/// and in JSON it reported the difference as *semantic* and exited 1.
+///
+/// Iterative rather than recursive: the corpus nests deeply and a fuzzer will
+/// nest worse, which is the lesson `core-cst`'s destructor taught at M1.
+fn reject_duplicate_keys(root: &SemanticNode, format: &'static str) -> Result<(), Unmodelled> {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        match node {
+            SemanticNode::Scalar(_) => {}
+            SemanticNode::Sequence(items) | SemanticNode::Stream(items) => stack.extend(items),
+            SemanticNode::Mapping(pairs) => {
+                for (index, (key, value)) in pairs.iter().enumerate() {
+                    if pairs.iter().take(index).any(|(earlier, _)| earlier == key) {
+                        return Err(Unmodelled {
+                            format,
+                            reason: "a mapping with the same key twice has no single meaning",
+                        });
+                    }
+                    stack.push(value);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // --- JSON ------------------------------------------------------------------
 
 /// Build the semantic view of a JSON tree.
@@ -127,10 +165,12 @@ impl SemanticNode {
 /// only produces for input it already rejected.
 pub(crate) fn json_view(cst: &Cst) -> Result<SemanticNode, Unmodelled> {
     let root = cst.root();
-    first_value(root.children()).ok_or(Unmodelled {
+    let view = first_value(root.children()).ok_or(Unmodelled {
         format: "json",
         reason: "the document contains no value",
-    })
+    })?;
+    reject_duplicate_keys(&view, "json")?;
+    Ok(view)
 }
 
 /// Tokens that carry no meaning: whitespace, byte-order marks, punctuation.
@@ -302,6 +342,12 @@ enum Line<'a> {
 /// documents, flow collections, anchors and aliases, tags, block scalars, and
 /// Go templates. Each is a refusal rather than a guess.
 pub(crate) fn yaml_view(cst: &Cst) -> Result<SemanticNode, Unmodelled> {
+    let view = yaml_documents(cst)?;
+    reject_duplicate_keys(&view, "yaml")?;
+    Ok(view)
+}
+
+fn yaml_documents(cst: &Cst) -> Result<SemanticNode, Unmodelled> {
     use crate::yaml::kind;
 
     let lines = child_lines(cst.root());
@@ -856,6 +902,38 @@ mod tests {
             "same string, different escape form"
         );
         assert_ne!(plain, escaped, "but the source text must still differ");
+    }
+
+    #[test]
+    fn a_duplicate_key_is_refused_in_both_formats() {
+        // Found by the differential runner, not by review: a real Kubernetes
+        // secret in the corpus has `type:` twice. A diff matches entries by
+        // key, so the second pairs against the first and the file reports a
+        // change AGAINST ITSELF. Both specs already call this an error — YAML
+        // 1.2 outright, RFC 8259 as "unpredictable" — so refusing is reading
+        // the spec, not inventing a rule.
+        let json = Json.parse(br#"{"a": "x", "a": "y"}"#).expect("parses");
+        let err = Json.semantic_view(&json).expect_err("duplicate key");
+        assert!(err.reason.contains("same key twice"), "{}", err.reason);
+
+        let reason = yaml_refusal("type: \"a\"\nother: 1\ntype: a\n");
+        assert!(reason.contains("same key twice"), "got {reason:?}");
+    }
+
+    #[test]
+    fn a_duplicate_nested_deep_is_still_refused() {
+        // The walk has to reach it. A duplicate three levels down is exactly as
+        // unsound as one at the root, and only the root is obvious.
+        let reason = yaml_refusal("a:\n  b:\n    c: 1\n    c: 2\n");
+        assert!(reason.contains("same key twice"), "got {reason:?}");
+    }
+
+    #[test]
+    fn the_same_key_in_different_mappings_is_fine() {
+        // The check is per-mapping, not per-document. `name:` appears in every
+        // container in every manifest ever written.
+        let view = yaml_view("a:\n  name: x\nb:\n  name: y\n");
+        assert!(matches!(view, SemanticNode::Mapping(_)));
     }
 
     #[test]
