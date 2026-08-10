@@ -158,14 +158,26 @@ jobs:
             --test conformance -- --nocapture
 
   # --- Gate: Differential suites -------------------------------------------
-  # ARMS AT konflux M2. Today this proves the external oracles CI depends on are
-  # present and behave as expected, so M2 does not discover that on day one.
+  # ARMED at konflux M2 (ADR-003, ADR-017). Two properties over the corpus:
+  # a file diffed against itself must report nothing, and a semantic edit we
+  # constructed must be noticed. The second is ground truth rather than a second
+  # tool — "ours vs diff3" is ill-posed, since a line differ and a structural
+  # differ do not compute the same function.
+  #
+  # It found a real soundness bug on its first run: duplicate mapping keys made
+  # a file report a change against ITSELF.
   differential:
     name: gate/differential
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: konflux's diff against itself and against a known edit
+        run: |
+          corpora/fetch.sh
+          cargo run --release -p xtask -- diff-differential
       - name: External oracles are present and behave
         shell: bash
         run: |

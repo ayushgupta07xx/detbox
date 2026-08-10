@@ -69,16 +69,19 @@ separate work and nobody has done it.
 1. **D1** — the umbrella brand and the `<b>` binary name. Blocks the multicall
    binary and the crates.io/org/domain reservation. Needs an actual name; §16
    makes it Ayush's alone and there is nothing to proceed on without one.
-2. **D4** — the LICENSE files. `MIT OR Apache-2.0` is declared in `Cargo.toml`
-   and the choice is settled; only the files are missing. **Not written, on
-   purpose:** the Apache-2.0 text must come from the canonical source, and the
-   two places it exists locally are a Helm chart carrying Broadcom's copyright
-   header and my memory. Neither is an acceptable provenance for a legal
-   document. One fetch settles it.
-3. **Branch protection on `main`**, so `CODEOWNERS` has teeth. It would have
-   caught two real slips this session: a three-deep PR stack that merged into
-   base branches instead of `main`, and a local `main` left without an upstream
-   after the history rewrite.
+2. ~~**D4**~~ — **settled 2026-08-09.** `LICENSE-MIT` and `LICENSE-APACHE` are
+   written. The Apache-2.0 text came from `apache.org` directly rather than
+   from the corpus copy that carries Broadcom's header, or from memory; 11,358
+   bytes, verified free of third-party notices.
+3. ~~**Branch protection**~~ — **enabled 2026-08-09.** 19 required checks (only
+   the ones that run on *every* PR; `miri`, `sanitizers` and
+   `benchmark-baseline` are path-filtered and requiring them would deadlock a
+   docs-only PR — verified against PR #13, which is docs-only and ran 19).
+   Force-pushes and deletions blocked. **`enforce_admins` is off on purpose:**
+   the trailer rewrite this session needed a force-push, and a solo maintainer
+   with no escape hatch just disables the protection permanently the first time
+   it blocks them. It still greys out the merge button when checks are red,
+   which is the accident it exists to catch.
 
 **ADR-009 through ADR-013 accepted 2026-08-09.** ADR-010 was accepted with its
 reasoning as drafted — assembled from the plan's own arguments rather than from
@@ -274,9 +277,11 @@ blocking today against the weakest *true* statement available, and arm here:
         kill rule — 8 weeks post-launch, <100 meaningful engagements and zero
         organic issues, and konflux freezes.
       - Consequence for D2: Tauri is off the critical path until Phase 3.
-- [!] **D4** — final licence (`MIT OR Apache-2.0` is declared per §2/§10; the
-      LICENSE files are not written pending D4).
-- [!] **Enable branch protection on `main`** so `CODEOWNERS` has teeth.
+- [x] **D4** — final licence, settled 2026-08-09. `MIT OR Apache-2.0`, both
+      files written; the Apache text fetched from `apache.org`, not copied from
+      the corpus or reproduced from memory.
+- [x] **Branch protection on `main`** — enabled 2026-08-09; 19 required checks,
+      force-push and deletion blocked, admin enforcement off as an escape hatch.
 - [ ] r/kubernetes post — §11 names three venues; only two were requested.
       Say the word and I will draft it.
 
@@ -680,8 +685,37 @@ where Mergiraf and diff3 win*, 60-second screencast, README per §12.
       - Diffing `.yaml` against `.json` is a usage error, not a conversion —
         that is veritas's job (§4.5), and doing it quietly here would be a
         second product hiding inside the first.
-- [ ] Differential runner online: ours vs `diff3`/`git diff` on the corpus;
-      divergences triaged into golden cases, never ignored.
+- [x] **Differential runner online**, and `gate/differential` **armed** on
+      ADR-003's schedule. → **ADR-017**.
+      - *"Ours vs diff3" is ill-posed and was not implemented as written.* A
+        line differ and a structural differ do not compute the same function,
+        so there is no agreement set; §8's differential row says "yes on
+        agreement set" and here it would be empty. Instead: **ground truth we
+        construct**, which is stronger than a second tool because we know
+        exactly what changed, so silence is unambiguously a lost edit.
+      - Two properties over 640 corpus files: a file diffed against itself must
+        report nothing, and a known appended key must be noticed.
+      - **It found a real soundness bug on its first run.** A corpus Kubernetes
+        secret has `type:` twice; the diff matches entries by key, so the second
+        paired against the first and the file **reported a change against
+        itself**. In JSON it was worse — `{"a":"x","a":"y"}` versus itself
+        reported a *semantic* change and exited 1, so CI would fail on a file
+        diffed against its own copy.
+      - Fixed by refusing duplicate keys. Both specs already do (YAML 1.2 an
+        error, RFC 8259 "unpredictable"), so this reads the spec rather than
+        inventing a rule. Coverage 64.7% → **64.3%**: three files refused, which
+        is cheaper than being wrong about them.
+      - **It also found a bug in itself.** Eight "lost edits" were istio
+        manifests ending in `---`, where appending a key makes a *second
+        document* — a shape change konflux reported correctly. The runner was
+        blaming the tool for its own mutation. Every skip class is now printed,
+        because a runner that quietly narrows its corpus reports on a sample it
+        chose.
+      - *Scope, stated:* one probe is one property. This catches a lost
+        **addition**, not a lost modification or deletion. Those are further
+        mutations and are cheap to add.
+      - Mergiraf remains the real peer comparison and arrives at **M3**, where
+        §4.1 P3 asks for auto-resolution rates against it.
 - [ ] `NO_COLOR`, non-TTY, deterministic ordering (C1–C3).
 
 ### M3 — 3-way merge core + P2/P3 harness
